@@ -1,24 +1,22 @@
 add_executable(
-    hello-dawn 
+    hello-webgpu 
     main.cpp
 )
 
+include(deps/dr-webgpu)
 include(deps/fmt)
-include(deps/glfw) # Included before dawn since we want to use a custom glfw
-
-include(deps/dawn)
+include(deps/glfw)
 
 target_link_libraries(
-    hello-dawn
+    hello-webgpu
     PRIVATE
+        dr::webgpu
         fmt::fmt
-        webgpu_cpp
-        webgpu_dawn
-        webgpu_glfw
+        glfw::glfw
 )
 
 target_compile_options(
-    hello-dawn
+    hello-webgpu
     PRIVATE 
         -Wall -Wextra -Wpedantic -Werror
         # DEBUG
@@ -26,14 +24,13 @@ target_compile_options(
 )
 
 target_compile_definitions(
-    hello-dawn
+    hello-webgpu
     PRIVATE 
         # ...
 )
 
 target_link_options(
-    hello-dawn
+    hello-webgpu
     PRIVATE
         # ...
 )
-

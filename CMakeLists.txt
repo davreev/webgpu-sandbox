@@ -14,4 +14,4 @@ list(
 )
 
 # add_subdirectory(apps/hello-triangle)
-add_subdirectory(apps/hello-dawn)
+add_subdirectory(apps/hello-webgpu)
