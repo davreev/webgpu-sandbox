@@ -13,5 +13,5 @@ list(
     "${CMAKE_CURRENT_LIST_DIR}/cmake"
 )
 
-# add_subdirectory(apps/hello-triangle)
+add_subdirectory(libs/webgpu-glfw)
 add_subdirectory(apps/hello-webgpu)

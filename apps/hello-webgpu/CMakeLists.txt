@@ -3,16 +3,13 @@ add_executable(
     main.cpp
 )
 
-include(deps/dr-webgpu)
 include(deps/fmt)
-include(deps/glfw)
 
 target_link_libraries(
     hello-webgpu
     PRIVATE
-        dr::webgpu
         fmt::fmt
-        glfw::glfw
+        webgpu-glfw
 )
 
 target_compile_options(
