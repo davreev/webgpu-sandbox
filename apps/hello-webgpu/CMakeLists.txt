@@ -1,33 +1,21 @@
+set(app_name hello-webgpu)
+
 add_executable(
-    hello-webgpu 
+    ${app_name} 
     main.cpp
 )
 
 include(deps/fmt)
 
 target_link_libraries(
-    hello-webgpu
+    ${app_name}
     PRIVATE
         fmt::fmt
         webgpu-glfw
 )
 
 target_compile_options(
-    hello-webgpu
+    ${app_name}
     PRIVATE 
         -Wall -Wextra -Wpedantic -Werror
-        # DEBUG
-        -Wno-unused-function
-)
-
-target_compile_definitions(
-    hello-webgpu
-    PRIVATE 
-        # ...
-)
-
-target_link_options(
-    hello-webgpu
-    PRIVATE
-        # ...
 )

@@ -3,7 +3,6 @@ if(TARGET fmt::fmt)
 endif()
 
 include(FetchContent)
-set(FETCHCONTENT_QUIET FALSE) # Show download progress
 
 FetchContent_Declare(
     fmt

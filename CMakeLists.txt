@@ -13,5 +13,10 @@ list(
     "${CMAKE_CURRENT_LIST_DIR}/cmake"
 )
 
+# Show FetchContent download progress
+set(FETCHCONTENT_QUIET FALSE)
+
 add_subdirectory(libs/webgpu-glfw)
+
 add_subdirectory(apps/hello-webgpu)
+add_subdirectory(apps/learn-webgpu-cpp)

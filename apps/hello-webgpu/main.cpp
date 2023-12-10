@@ -3,59 +3,16 @@
 #include <fmt/core.h>
 
 #include <webgpu/glfw.h>
-
-namespace
-{
-
-WGPUAdapter requestAdapter(WGPUInstance const& instance, WGPURequestAdapterOptions const* options)
-{
-    struct Result
-    {
-        WGPUAdapter adapter{nullptr};
-        bool is_ready{false};
-    };
-    Result result;
-
-    auto const callback = //
-        [](WGPURequestAdapterStatus status,
-           WGPUAdapter adapter,
-           char const* message,
-           void* user_data)
-    {
-        auto result = static_cast<Result*>(user_data);
-        if (status == WGPURequestAdapterStatus_Success)
-            result->adapter = adapter;
-        else
-            fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
-
-        result->is_ready = true;
-    };
-
-    wgpuInstanceRequestAdapter(instance, options, callback, &result);
-    assert(result.is_ready);
-
-    return result.adapter;
-}
-
-} // namespace
+#include <webgpu/webgpu.h>
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    // TODO(dr): https://github.com/eliemichel/glfw3webgpu/blob/main/README.md#example
-
     WGPUInstanceDescriptor desc{};
-    desc.nextInChain = nullptr;
-
-    WGPUInstance instance = wgpuCreateInstance(&desc);
-
+    WGPUInstance const instance = wgpuCreateInstance(&desc);
     if (!instance)
     {
-        fmt::print("WebGPU initialization failed\n");
+        fmt::print("Failed to create WebGPU instance\n");
         return 1;
-    }
-    else
-    {
-        fmt::print("WebGPU initialization succeeded\n");
     }
 
     if (!glfwInit())
@@ -65,32 +22,27 @@ int main(int /*argc*/, char** /*argv*/)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello Triangle", nullptr, nullptr);
+    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello WebGPU", nullptr, nullptr);
     if (!window)
     {
         fmt::print("Failed to create window\n");
         return 1;
     }
-
-    // TODO(dr)
-    WGPUSurface surface = glfwGetWGPUSurface(instance, window);
-
-
-
-
-
+    WGPUSurface const surface = glfwGetWGPUSurface(instance, window);
+    if(!surface)
+    {
+        fmt::print("Failed to get WebGPU surface\n");
+        return 1;
+    }
 
     while (!glfwWindowShouldClose(window))
-    {
         glfwPollEvents();
-    }
+
+    wgpuSurfaceRelease(surface);
+    wgpuInstanceRelease(instance);
 
     glfwDestroyWindow(window);
     glfwTerminate();
-
-    // fmt::print("WGPU instance: {}", instance);
-    // wgpu::InstanceRelease(instance);
 
     return 0;
 }
