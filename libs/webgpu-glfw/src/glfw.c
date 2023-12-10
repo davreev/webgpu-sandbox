@@ -1,5 +1,9 @@
 #include <webgpu/glfw.h>
 
+/*
+    This is essentially a restructured version of https://github.com/eliemichel/glfw3webgpu
+*/
+
 #define WGPU_TARGET_MACOS 1
 #define WGPU_TARGET_LINUX_X11 2
 #define WGPU_TARGET_WINDOWS 3
@@ -37,16 +41,19 @@
 #include <GLFW/glfw3native.h>
 #endif
 
-WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
-{
 #if WGPU_TARGET == WGPU_TARGET_MACOS
+typedef WGPUSurfaceDescriptorFromMetalLayer TargetSurfaceDesc;
+
+static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+{
     NSWindow* ns_window = glfwGetCocoaWindow(window);
     [ns_window.contentView setWantsLayer:YES];
+
     id metal_layer = [CAMetalLayer layer];
     [ns_window.contentView setLayer:metal_layer];
 
     // clang-format off
-    WGPUSurfaceDescriptorFromMetalLayer const srfDesc = {
+    return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromMetalLayer,
@@ -54,13 +61,18 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
         .layer = metal_layer,
     };
     // clang-format on
+}
 
 #elif WGPU_TARGET == WGPU_TARGET_LINUX_X11
+typedef WGPUSurfaceDescriptorFromXlibWindow TargetSurfaceDesc;
+
+static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+{
     Display* x11_display = glfwGetX11Display();
     Window x11_window = glfwGetX11Window(window);
 
     // clang-format off
-    WGPUSurfaceDescriptorFromXlibWindow const srfDesc = {
+    return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromXlibWindow,
@@ -69,13 +81,18 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
         .window = x11_window,
     };
     // clang-format on
+}
 
 #elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
+typedef WGPUSurfaceDescriptorFromWaylandSurface TargetSurfaceDesc;
+
+static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+{
     struct wl_display* wayland_display = glfwGetWaylandDisplay();
     struct wl_surface* wayland_surface = glfwGetWaylandWindow(window);
 
     // clang-format off
-    WGPUSurfaceDescriptorFromWaylandSurface const srfDesc = {
+    return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromWaylandSurface,
@@ -84,13 +101,18 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
         .surface = wayland_surface,
     };
     // clang-format on
+}
 
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
+typedef WGPUSurfaceDescriptorFromWindowsHWND TargetSurfaceDesc;
+
+static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+{
     HWND hwnd = glfwGetWin32Window(window);
     HINSTANCE hinstance = GetModuleHandle(NULL);
 
     // clang-format off
-    WGPUSurfaceDescriptorFromWindowsHWND const srfDesc = {
+    return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromWindowsHWND,
@@ -99,10 +121,15 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
         .hwnd = hwnd,
     };
     // clang-format on
+}
 
 #elif WGPU_TARGET == WGPU_TARGET_EMSCRIPTEN
+typedef WGPUSurfaceDescriptorFromCanvasHTMLSelector TargetSurfaceDesc;
+
+static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* /*window*/)
+{
     // clang-format off
-    WGPUSurfaceDescriptorFromCanvasHTMLSelector const srfDesc = {
+    return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector,
@@ -110,16 +137,20 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
         .selector = "canvas",
     };
     // clang-format on
+}
 
 #else
 #error "Unsupported WGPU_TARGET"
 
 #endif
 
+WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
+{
+    TargetSurfaceDesc const desc = targetSurfaceDesc(window);
     return wgpuInstanceCreateSurface(
         instance,
         &(WGPUSurfaceDescriptor){
             .label = NULL,
-            .nextInChain = (WGPUChainedStruct const*)&srfDesc,
+            .nextInChain = (WGPUChainedStruct const*)&desc,
         });
 }
