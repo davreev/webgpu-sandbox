@@ -2,47 +2,61 @@
 
 #include <fmt/core.h>
 
+#include <webgpu/app.hpp>
 #include <webgpu/glfw.h>
 #include <webgpu/webgpu.h>
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    WGPUInstanceDescriptor desc{};
-    WGPUInstance const instance = wgpuCreateInstance(&desc);
-    if (!instance)
-    {
-        fmt::print("Failed to create WebGPU instance\n");
-        return 1;
-    }
+    using namespace wgpu;
 
+    // Create WebGPU instance
+    WGPUInstance instance{};
+    {
+        WGPUInstanceDescriptor desc{};
+        instance = wgpuCreateInstance(&desc);
+        if (!instance)
+        {
+            fmt::print("Failed to create WebGPU instance\n");
+            return 1;
+        }
+    }
+    auto const drop_instance = defer([=]() { wgpuInstanceRelease(instance); });
+
+    // Initialize GLFW
     if (!glfwInit())
     {
         fmt::print("Failed to initialize GLFW\n");
         return 1;
     }
+    auto const drop_glfw = defer([]() { glfwTerminate(); });
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello WebGPU", nullptr, nullptr);
-    if (!window)
+    // Create GLFW window
+    GLFWwindow* window{};
     {
-        fmt::print("Failed to create window\n");
-        return 1;
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        window = glfwCreateWindow(640, 480, "Hello WebGPU", nullptr, nullptr);
+        if (!window)
+        {
+            fmt::print("Failed to create window\n");
+            return 1;
+        }
     }
+    auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
+
+    // Get WebGPU surface from GLFW window
     WGPUSurface const surface = glfwGetWGPUSurface(instance, window);
-    if(!surface)
+    if (!surface)
     {
         fmt::print("Failed to get WebGPU surface\n");
         return 1;
     }
+    auto const drop_surface = defer([=]() { wgpuSurfaceRelease(surface); });
 
+    // Frame loop
     while (!glfwWindowShouldClose(window))
         glfwPollEvents();
-
-    wgpuSurfaceRelease(surface);
-    wgpuInstanceRelease(instance);
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
 
     return 0;
 }

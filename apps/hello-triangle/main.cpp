@@ -1,11 +1,39 @@
 #include <cassert>
-#include <vector>
 
 #include <fmt/core.h>
 
 #include <webgpu/app.hpp>
 #include <webgpu/glfw.h>
 #include <webgpu/webgpu.h>
+
+#include "gfx_config.h"
+
+namespace wgpu
+{
+
+constexpr char const* shader_src = R"(
+@vertex
+fn vs_main(@builtin(vertex_index) v: u32) -> @builtin(position) vec4f {
+    // TODO(dr): Use lookup table
+    if(v == 0u){
+        return vec4f(-0.5, -0.5, 0.0, 1.0);
+    } else if(v == 1u){
+        return vec4f(0.5, -0.5, 0.0, 1.0);
+    } else if(v == 2u){
+        return vec4f(0.0, 0.5, 0.0, 1.0);
+    } else {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(0.0, 0.4, 1.0, 1.0);
+}
+
+)";
+
+}
 
 int main(int /*argc*/, char** /*argv*/)
 {
@@ -37,7 +65,7 @@ int main(int /*argc*/, char** /*argv*/)
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(640, 480, "Hello Render Pass", nullptr, nullptr);
+        window = glfwCreateWindow(640, 480, "Hello Triangle", nullptr, nullptr);
         if (!window)
         {
             fmt::print("Failed to create window\n");
@@ -66,11 +94,6 @@ int main(int /*argc*/, char** /*argv*/)
             fmt::print("Failed to get WebGPU adapter\n");
             return 1;
         }
-
-        report_features(adapter);
-        report_limits(adapter);
-        report_properties(adapter);
-        report_surface_capabilities(surface, adapter);
     }
     auto const drop_adapter = defer([=]() { wgpuAdapterRelease(adapter); });
 
@@ -84,9 +107,6 @@ int main(int /*argc*/, char** /*argv*/)
             fmt::print("Failed to get WebGPU device\n");
             return 1;
         }
-
-        report_features(device);
-        report_limits(device);
 
         // Set error callback to provide debug info
         constexpr auto device_error_cb =
@@ -130,17 +150,26 @@ int main(int /*argc*/, char** /*argv*/)
     }
     auto const unconfig_srf = defer([&] { wgpuSurfaceUnconfigure(surface); });
 
-    // Frame loop
+    // Create shader module
+    WGPUShaderModule const shader = make_shader_module(device, shader_src);
+    auto const drop_shader = defer([&]() { wgpuShaderModuleRelease(shader); });
+
+    // Create render pipeline
+    WGPURenderPipeline const pipeline =
+        make_render_pipeline(device, shader, wgpuSurfaceGetPreferredFormat(surface, adapter));
+    auto const drop_pipeline = defer([&]() { wgpuRenderPipelineRelease(pipeline); });
+
+    // Start frame loop
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
 
         // Get the texture to render the frame to
-        WGPUSurfaceTexture srf_tex;
-        wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
-        if (srf_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
+        WGPUSurfaceTexture curr_tex;
+        wgpuSurfaceGetCurrentTexture(surface, &curr_tex);
+        if (curr_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
         {
-            fmt::print("Failed to get surface texture ({})\n", to_string(srf_tex.status));
+            fmt::print("Failed to get surface texture ({})\n", to_string(curr_tex.status));
             return 1;
         }
 
@@ -158,36 +187,15 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            WGPUTextureView view{};
-            {
-                WGPUTextureViewDescriptor desc{};
-                {
-                    desc.mipLevelCount = 1;
-                    desc.arrayLayerCount = 1;
-                }
-                view = wgpuTextureCreateView(srf_tex.texture, &desc);
-            }
-            auto const drop_view = defer([&]() { wgpuTextureViewRelease(view); });
+            WGPUTextureView const tex_view = make_texture_view(curr_tex);
+            // TODO(dr): Example releases the texture view after render pass closed
+            auto const drop_tex_view = defer([&]() { wgpuTextureViewRelease(tex_view); });
 
-            WGPURenderPassColorAttachment color{};
-            {
-                color.view = view;
-                color.loadOp = WGPULoadOp_Clear;
-                color.storeOp = WGPUStoreOp_Store;
-                color.clearValue = WGPUColor{1.0, 0.3, 0.3, 1.0};
-            }
-
-            WGPURenderPassDescriptor desc{};
-            {
-                desc.colorAttachments = &color;
-                desc.colorAttachmentCount = 1;
-                // ...
-            }
-
-            WGPURenderPassEncoder const pass = wgpuCommandEncoderBeginRenderPass(encoder, &desc);
+            WGPURenderPassEncoder const pass = begin_render_pass(encoder, tex_view);
             auto const end_pass = defer([&]() { wgpuRenderPassEncoderEnd(pass); });
 
-            // NOTE(dr): Render pass clears the screen by default
+            wgpuRenderPassEncoderSetPipeline(pass, pipeline);
+            wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
         }
 
         // Create a command via the encoder

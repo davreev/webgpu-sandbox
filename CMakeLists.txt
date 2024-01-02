@@ -21,3 +21,4 @@ add_subdirectory(libs/webgpu-app)
 
 add_subdirectory(apps/hello-webgpu)
 add_subdirectory(apps/hello-render-pass)
+add_subdirectory(apps/hello-triangle)

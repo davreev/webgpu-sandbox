@@ -1,5 +1,6 @@
 add_executable(
     hello-triangle 
+    gfx_config.c
     main.cpp
 )
 
