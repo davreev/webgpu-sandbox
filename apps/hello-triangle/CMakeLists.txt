@@ -1,10 +1,10 @@
 add_executable(
-    hello-webgpu 
+    hello-triangle 
     main.cpp
 )
 
 target_link_libraries(
-    hello-webgpu
-    PRIVATE
+    hello-triangle 
+    PRIVATE 
         webgpu-app
 )

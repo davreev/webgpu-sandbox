@@ -1,10 +1,10 @@
 add_executable(
-    hello-webgpu 
+    hello-render-pass 
     main.cpp
 )
 
 target_link_libraries(
-    hello-webgpu
-    PRIVATE
+    hello-render-pass 
+    PRIVATE 
         webgpu-app
 )

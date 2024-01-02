@@ -4,5 +4,6 @@
 -Ibuild/_deps/webgpu-cpp-src/include/
 -Ibuild/_deps/fmt-src/include/
 -Ibuild/_deps/glfw-src/include/
+-Ilibs/webgpu-app/include/
 -Ilibs/webgpu-glfw/include/
 -DNOMINMAX

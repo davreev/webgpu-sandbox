@@ -17,6 +17,7 @@ list(
 set(FETCHCONTENT_QUIET FALSE)
 
 add_subdirectory(libs/webgpu-glfw)
+add_subdirectory(libs/webgpu-app)
 
 add_subdirectory(apps/hello-webgpu)
-add_subdirectory(apps/learn-webgpu-cpp)
+add_subdirectory(apps/hello-render-pass)
