@@ -7,7 +7,7 @@ include(FetchContent)
 FetchContent_Declare(
     dr-webgpu
     GIT_REPOSITORY git@github.com:davreev/dr-webgpu.git
-    GIT_TAG c99a6bdac7004990c7b10096dfc3b14f6ecac23e # 0.1.0
+    GIT_TAG 7b45039a75d3f834360b18e110cbead338591c76 # 0.1.0
     GIT_PROGRESS TRUE
 )
 

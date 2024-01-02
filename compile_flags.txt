@@ -1,7 +1,8 @@
 -xc++
 -std=c++17
--Ibuild/_deps/dawn-build/gen/include/
--Ibuild/_deps/dawn-src/include/
+-Ibuild/_deps/wgpu-native-src/include/
+-Ibuild/_deps/webgpu-cpp-src/include/
 -Ibuild/_deps/fmt-src/include/
 -Ibuild/_deps/glfw-src/include/
+-Ilibs/webgpu-glfw/include/
 -DNOMINMAX
