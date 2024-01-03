@@ -1,7 +1,7 @@
 add_executable(
     hello-triangle 
-    gfx_config.c
     main.cpp
+    wgpu_config.c
 )
 
 target_link_libraries(

@@ -1,5 +1,5 @@
-#ifndef GFX_CONFIG_INCLUDED
-#define GFX_CONFIG_INCLUDED
+#ifndef WGPU_CONFIG_INCLUDED
+#define WGPU_CONFIG_INCLUDED
 
 #include <webgpu/webgpu.h>
 
@@ -23,4 +23,4 @@ WGPURenderPassEncoder begin_render_pass(WGPUCommandEncoder encoder, WGPUTextureV
 } // extern "C"
 #endif
 
-#endif // GFX_CONFIG_INCLUDED
+#endif // WGPU_CONFIG_INCLUDED

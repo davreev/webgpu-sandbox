@@ -2,24 +2,21 @@
 
 #include <fmt/core.h>
 
+#include <webgpu/webgpu.h>
+
 #include <webgpu/app.hpp>
 #include <webgpu/glfw.h>
-#include <webgpu/webgpu.h>
 
 int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu;
 
     // Create WebGPU instance
-    WGPUInstance instance{};
+    WGPUInstance const instance = wgpuCreateInstance(nullptr);
+    if (!instance)
     {
-        WGPUInstanceDescriptor desc{};
-        instance = wgpuCreateInstance(&desc);
-        if (!instance)
-        {
-            fmt::print("Failed to create WebGPU instance\n");
-            return 1;
-        }
+        fmt::print("Failed to create WebGPU instance\n");
+        return 1;
     }
     auto const drop_instance = defer([=]() { wgpuInstanceRelease(instance); });
 

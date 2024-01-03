@@ -51,6 +51,14 @@ void report_limits(WGPULimits const& limits)
 
 } // namespace
 
+void poll_events(WGPUQueue const device_queue)
+{
+#if !defined(_EMSCRIPTEN_)
+    // NOTE(dr): This is non-standard behaviour specific to wgpu-native
+    wgpuQueueSubmit(device_queue, 0, nullptr);
+#endif
+}
+
 WGPUAdapter request_adapter(
     WGPUInstance const instance,
     WGPURequestAdapterOptions const* const options)
@@ -415,6 +423,24 @@ char const* to_string(WGPUPresentMode const value)
         "FifoRelaxed",
         "Immediate",
         "Mailbox",
+    };
+
+    assert(value < std::size(names));
+    return names[value];
+}
+
+char const* to_string(WGPUBufferMapAsyncStatus value)
+{
+    static constexpr char const* names[]{
+        "Success",
+        "ValidationError",
+        "Unknown",
+        "DeviceLost",
+        "DestroyedBeforeCallback",
+        "UnmappedBeforeCallback",
+        "MappingAlreadyPending",
+        "OffsetOutOfRange",
+        "SizeOutOfRange",
     };
 
     assert(value < std::size(names));

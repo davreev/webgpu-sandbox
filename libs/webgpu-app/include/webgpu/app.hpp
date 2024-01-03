@@ -42,7 +42,11 @@ template <typename Func>
     return {std::forward<Func>(func)};
 }
 
-WGPUAdapter request_adapter(WGPUInstance instance, WGPURequestAdapterOptions const* options);
+void poll_events(WGPUQueue device_queue);
+
+WGPUAdapter request_adapter(
+    WGPUInstance instance,
+    WGPURequestAdapterOptions const* options = nullptr);
 
 WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc = nullptr);
 
@@ -75,5 +79,7 @@ char const* to_string(WGPUTextureFormat value);
 char const* to_string(WGPUCompositeAlphaMode value);
 
 char const* to_string(WGPUPresentMode value);
+
+char const* to_string(WGPUBufferMapAsyncStatus value);
 
 } // namespace wgpu

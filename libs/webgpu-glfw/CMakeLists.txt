@@ -9,15 +9,14 @@ target_include_directories(
         "${CMAKE_CURRENT_LIST_DIR}/include"
 )
 
-include(deps/dr-webgpu)
 include(deps/glfw)
+target_link_libraries(webgpu-glfw PUBLIC glfw::glfw)
 
-target_link_libraries(
-    webgpu-glfw
-    PUBLIC
-        dr::webgpu
-        glfw::glfw
-)
+# Link to wgpu-native if not compiling with Emscripten
+if(NOT EMSCRIPTEN)
+    include(deps/wgpu-native)
+    target_link_libraries(webgpu-glfw PUBLIC wgpu-native)
+endif()
 
 target_compile_options(
     webgpu-glfw

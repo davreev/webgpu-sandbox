@@ -1,13 +1,13 @@
-#include "gfx_config.h"
-
-#include <assert.h>
+#include "wgpu_config.h"
 
 WGPUShaderModule make_shader_module(WGPUDevice const device, char const* const shader_src)
 {
     // clang-format off
     WGPUShaderModuleWGSLDescriptor const next_desc = {
+        .chain = {
+            .sType = WGPUSType_ShaderModuleWGSLDescriptor,
+        },
         .code = shader_src,
-        .chain.sType = WGPUSType_ShaderModuleWGSLDescriptor,
     };
 
     WGPUShaderModuleDescriptor const desc = {
@@ -25,6 +25,8 @@ WGPURenderPipeline make_render_pipeline(
 {
     // clang-format off
     WGPURenderPipelineDescriptor const desc = {
+        // .layout = {
+        // },
         .vertex = {
             .module = shader_module,
             .entryPoint = "vs_main",
@@ -34,38 +36,34 @@ WGPURenderPipeline make_render_pipeline(
             .frontFace = WGPUFrontFace_CCW,
             .cullMode = WGPUCullMode_None,
         },
+        // .depthStencil = &(WGPUDepthStencilState){
+        // },
+        .multisample = {
+            .count = 1,
+            .mask = ~0u,
+            .alphaToCoverageEnabled = 0u,
+        },
         .fragment = &(WGPUFragmentState){
             .module = shader_module,
             .entryPoint = "fs_main",
             .targetCount = 1,
             .targets = &(WGPUColorTargetState){
                 .format = color_format,
-                .writeMask = WGPUColorWriteMask_All,
                 .blend = &(WGPUBlendState){
                     .color = {
+                        .operation = WGPUBlendOperation_Add,
                         .srcFactor = WGPUBlendFactor_SrcAlpha,
                         .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-                        .operation = WGPUBlendOperation_Add,
                     },
                     .alpha = {
+                        .operation = WGPUBlendOperation_Add,
                         .srcFactor = WGPUBlendFactor_Zero,
                         .dstFactor = WGPUBlendFactor_One,
-                        .operation = WGPUBlendOperation_Add,
                     },
                 },
+                .writeMask = WGPUColorWriteMask_All,
             },
         },
-        .multisample = {
-            .count = 1,
-            .mask = ~0u,
-            .alphaToCoverageEnabled = 0u,
-        },
-        // .depthStencil = &(WGPUDepthStencilState){
-        //     // ...
-        // },
-        // .layout = {
-        //     // ...
-        // }.
     };
     // clang-format on
 
@@ -81,7 +79,9 @@ WGPUTextureView make_texture_view(WGPUSurfaceTexture const srf_texture)
     return wgpuTextureCreateView(srf_texture.texture, &desc);
 }
 
-WGPURenderPassEncoder begin_render_pass(WGPUCommandEncoder const encoder, WGPUTextureView const tex_view)
+WGPURenderPassEncoder begin_render_pass(
+    WGPUCommandEncoder const encoder,
+    WGPUTextureView const tex_view)
 {
     // clang-format off
     WGPURenderPassDescriptor const desc = {
@@ -91,7 +91,7 @@ WGPURenderPassEncoder begin_render_pass(WGPUCommandEncoder const encoder, WGPUTe
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
             .clearValue = { .r = 1.0, .g = 0.3, .b = 0.3, .a = 1.0},
-        }
+        },
     };
     // clang-format on
 
