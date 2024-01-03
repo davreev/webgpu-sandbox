@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <utility>
-#include <vector>
 
 #include <fmt/core.h>
 
@@ -45,7 +44,7 @@ template <typename Func>
 
 WGPUAdapter request_adapter(WGPUInstance instance, WGPURequestAdapterOptions const* options);
 
-WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc);
+WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc = nullptr);
 
 void report_features(WGPUAdapter adapter);
 

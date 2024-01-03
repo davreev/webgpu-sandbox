@@ -1,5 +1,7 @@
 #include <webgpu/app.hpp>
 
+#include <vector>
+
 namespace wgpu
 {
 namespace

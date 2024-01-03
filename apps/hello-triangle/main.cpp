@@ -14,23 +14,18 @@ namespace wgpu
 constexpr char const* shader_src = R"(
 @vertex
 fn vs_main(@builtin(vertex_index) v: u32) -> @builtin(position) vec4f {
-    // TODO(dr): Use lookup table
-    if(v == 0u){
-        return vec4f(-0.5, -0.5, 0.0, 1.0);
-    } else if(v == 1u){
-        return vec4f(0.5, -0.5, 0.0, 1.0);
-    } else if(v == 2u){
-        return vec4f(0.0, 0.5, 0.0, 1.0);
-    } else {
-        return vec4f(0.0, 0.0, 0.0, 1.0);
-    }
+    var p = array<vec2f, 3>(
+        vec2f(-0.5, -0.5),
+        vec2f(0.5, -0.5),
+        vec2f(0.0, 0.5)
+    );
+    return vec4f(p[v], 0.0, 1.0);
 }
 
 @fragment
 fn fs_main() -> @location(0) vec4f {
-    return vec4f(0.0, 0.4, 1.0, 1.0);
+    return vec4f(0.3, 0.3, 1.0, 1.0);
 }
-
 )";
 
 }
@@ -42,8 +37,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create WebGPU instance
     WGPUInstance instance{};
     {
-        WGPUInstanceDescriptor desc{};
-        instance = wgpuCreateInstance(&desc);
+        instance = wgpuCreateInstance(nullptr);
         if (!instance)
         {
             fmt::print("Failed to create WebGPU instance\n");
@@ -87,7 +81,11 @@ int main(int /*argc*/, char** /*argv*/)
     WGPUAdapter adapter{};
     {
         WGPURequestAdapterOptions options{};
-        options.compatibleSurface = surface;
+        {
+            options.compatibleSurface = surface;
+            // ...
+        }
+
         adapter = request_adapter(instance, &options);
         if (!adapter)
         {
@@ -100,8 +98,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create WebGPU device
     WGPUDevice device{};
     {
-        WGPUDeviceDescriptor desc{};
-        device = request_device(adapter, &desc);
+        device = request_device(adapter);
         if (!device)
         {
             fmt::print("Failed to get WebGPU device\n");
@@ -122,41 +119,39 @@ int main(int /*argc*/, char** /*argv*/)
     }
     auto const drop_device = defer([=]() { wgpuDeviceRelease(device); });
 
-    // Get the device's queue
-    WGPUQueue const queue = wgpuDeviceGetQueue(device);
-    {
-        // Add callback which fires whenever queued work is done
-        auto const work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* /*userdata*/)
-        { fmt::print("Queued work finished with status: {}\n", to_string(status)); };
-
-        wgpuQueueOnSubmittedWorkDone(queue, work_done_cb, nullptr);
-    }
-
-    // Configure surface via the device (replaces swap chain API)
+    // Configure surface (replaces swap chain API)
+    WGPUSurfaceConfiguration surface_config{};
     {
         int width, height;
         glfwGetWindowSize(window, &width, &height);
 
-        WGPUSurfaceConfiguration config{};
-        {
-            config.device = device;
-            config.width = width;
-            config.height = height;
-            config.format = wgpuSurfaceGetPreferredFormat(surface, adapter);
-            config.usage = WGPUTextureUsage_RenderAttachment;
-            config.presentMode = WGPUPresentMode_Mailbox;
-        }
-        wgpuSurfaceConfigure(surface, &config);
+        surface_config.device = device;
+        surface_config.width = width;
+        surface_config.height = height;
+        surface_config.format = wgpuSurfaceGetPreferredFormat(surface, adapter);
+        surface_config.usage = WGPUTextureUsage_RenderAttachment;
+        surface_config.presentMode = WGPUPresentMode_Mailbox;
+
+        wgpuSurfaceConfigure(surface, &surface_config);
     }
     auto const unconfig_srf = defer([&] { wgpuSurfaceUnconfigure(surface); });
+
+    // Get the device's queue
+    WGPUQueue const queue = wgpuDeviceGetQueue(device);
+    {
+        // Register callback that fires whenever queued work is done
+        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* /*userdata*/)
+        { fmt::print("Queued work finished with status: {}\n", to_string(status)); };
+
+        wgpuQueueOnSubmittedWorkDone(queue, work_done_cb, nullptr);
+    }
 
     // Create shader module
     WGPUShaderModule const shader = make_shader_module(device, shader_src);
     auto const drop_shader = defer([&]() { wgpuShaderModuleRelease(shader); });
 
     // Create render pipeline
-    WGPURenderPipeline const pipeline =
-        make_render_pipeline(device, shader, wgpuSurfaceGetPreferredFormat(surface, adapter));
+    WGPURenderPipeline const pipeline = make_render_pipeline(device, shader, surface_config.format);
     auto const drop_pipeline = defer([&]() { wgpuRenderPipelineRelease(pipeline); });
 
     // Start frame loop
@@ -174,21 +169,12 @@ int main(int /*argc*/, char** /*argv*/)
         }
 
         // Create a command encoder from the device
-        WGPUCommandEncoder encoder{};
-        {
-            WGPUCommandEncoderDescriptor desc{};
-            encoder = wgpuDeviceCreateCommandEncoder(device, &desc);
-        }
+        WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
-
-        // Can use debug markers on the encoder for printf-like debugging bw commands
-        // wgpuCommandEncoderInsertDebugMarker(encoder, "Do a thing");
-        // wgpuCommandEncoderInsertDebugMarker(encoder, "Do another thing");
 
         // Render pass
         {
             WGPUTextureView const tex_view = make_texture_view(curr_tex);
-            // TODO(dr): Example releases the texture view after render pass closed
             auto const drop_tex_view = defer([&]() { wgpuTextureViewRelease(tex_view); });
 
             WGPURenderPassEncoder const pass = begin_render_pass(encoder, tex_view);
@@ -199,11 +185,8 @@ int main(int /*argc*/, char** /*argv*/)
         }
 
         // Create a command via the encoder
-        WGPUCommandBuffer command{};
-        {
-            WGPUCommandBufferDescriptor desc{};
-            command = wgpuCommandEncoderFinish(encoder, &desc);
-        }
+        WGPUCommandBuffer const command = wgpuCommandEncoderFinish(encoder, nullptr);
+        auto const drop_command = defer([&]() { wgpuCommandBufferRelease(command); });
 
         // Submit encoded command
         wgpuQueueSubmit(queue, 1, &command);
