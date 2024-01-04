@@ -20,7 +20,7 @@ WGPURenderPassEncoder begin_render_pass(
             .view = tex_view,
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
-            .clearValue = { .r = 1.0, .g = 0.3, .b = 0.3, .a = 1.0},
+            .clearValue = { .r = 1.0, .g = 0.0, .b = 0.5, .a = 1.0},
         },
     };
     // clang-format on

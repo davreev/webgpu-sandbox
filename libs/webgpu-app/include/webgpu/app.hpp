@@ -44,6 +44,8 @@ template <typename Func>
 
 void poll_events(WGPUQueue device_queue);
 
+WGPUSurfaceTexture get_current_texture(WGPUSurface surface);
+
 WGPUAdapter request_adapter(
     WGPUInstance instance,
     WGPURequestAdapterOptions const* options = nullptr);

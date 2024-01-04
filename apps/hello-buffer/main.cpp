@@ -6,7 +6,6 @@
 #include <webgpu/webgpu.h>
 
 #include <webgpu/app.hpp>
-// #include <webgpu/glfw.h>
 
 #include "wgpu_config.h"
 
@@ -79,7 +78,7 @@ int main(int /*argc*/, char** /*argv*/)
     ctx.src_buf = make_buffer(device, 16, WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc);
     ctx.dst_buf = make_buffer(device, 16, WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead);
 
-    // Submit command that copies data from one buffer to another
+    // Submit command to copy data from one buffer to another
     {
         // Create command encoder
         WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);

@@ -1,7 +1,7 @@
 #include "wgpu_config.h"
 #include "webgpu/webgpu.h"
 
-WGPUBuffer make_buffer(WGPUDevice device, size_t size, WGPUBufferUsageFlags usage)
+WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsageFlags const usage)
 {
     WGPUBufferDescriptor const desc = {
         .usage = usage,

@@ -11,6 +11,25 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu;
 
+    // Initialize GLFW
+    if (!glfwInit())
+    {
+        fmt::print("Failed to initialize GLFW\n");
+        return 1;
+    }
+    auto const deinit_glfw = defer([]() { glfwTerminate(); });
+
+    // Create GLFW window
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello WebGPU", nullptr, nullptr);
+    if (!window)
+    {
+        fmt::print("Failed to create window\n");
+        return 1;
+    }
+    auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
+
     // Create WebGPU instance
     WGPUInstance const instance = wgpuCreateInstance(nullptr);
     if (!instance)
@@ -19,28 +38,6 @@ int main(int /*argc*/, char** /*argv*/)
         return 1;
     }
     auto const drop_instance = defer([=]() { wgpuInstanceRelease(instance); });
-
-    // Initialize GLFW
-    if (!glfwInit())
-    {
-        fmt::print("Failed to initialize GLFW\n");
-        return 1;
-    }
-    auto const drop_glfw = defer([]() { glfwTerminate(); });
-
-    // Create GLFW window
-    GLFWwindow* window{};
-    {
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        window = glfwCreateWindow(640, 480, "Hello WebGPU", nullptr, nullptr);
-        if (!window)
-        {
-            fmt::print("Failed to create window\n");
-            return 1;
-        }
-    }
-    auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
 
     // Get WebGPU surface from GLFW window
     WGPUSurface const surface = glfwGetWGPUSurface(instance, window);

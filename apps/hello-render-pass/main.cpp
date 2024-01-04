@@ -13,22 +13,13 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu;
 
-    // Create WebGPU instance
-    WGPUInstance const instance = wgpuCreateInstance(nullptr);
-    if (!instance)
-    {
-        fmt::print("Failed to create WebGPU instance\n");
-        return 1;
-    }
-    auto const drop_instance = defer([=]() { wgpuInstanceRelease(instance); });
-
     // Initialize GLFW
     if (!glfwInit())
     {
         fmt::print("Failed to initialize GLFW\n");
         return 1;
     }
-    auto const drop_glfw = defer([]() { glfwTerminate(); });
+    auto const deinit_glfw = defer([]() { glfwTerminate(); });
 
     // Create GLFW window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -40,6 +31,15 @@ int main(int /*argc*/, char** /*argv*/)
         return 1;
     }
     auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
+
+    // Create WebGPU instance
+    WGPUInstance const instance = wgpuCreateInstance(nullptr);
+    if (!instance)
+    {
+        fmt::print("Failed to create WebGPU instance\n");
+        return 1;
+    }
+    auto const drop_instance = defer([=]() { wgpuInstanceRelease(instance); });
 
     // Get WebGPU surface from GLFW window
     WGPUSurface const surface = glfwGetWGPUSurface(instance, window);
@@ -54,7 +54,10 @@ int main(int /*argc*/, char** /*argv*/)
     WGPUAdapter adapter{};
     {
         WGPURequestAdapterOptions options{};
-        options.compatibleSurface = surface;
+        {
+            options.compatibleSurface = surface;
+            options.powerPreference = WGPUPowerPreference_HighPerformance;
+        }
         adapter = request_adapter(instance, &options);
     }
     if (!adapter)
@@ -84,14 +87,14 @@ int main(int /*argc*/, char** /*argv*/)
     report_limits(device);
 
     // Set error callback on device
-    constexpr auto device_error_cb = [](WGPUErrorType type, char const* message, void* /*userdata*/)
-    {
-        fmt::print(
-            "Device error: {} ({})\nMessage: {}\n",
-            to_string(type),
-            static_cast<int>(type),
-            message);
-    };
+    constexpr auto device_error_cb =
+        [](WGPUErrorType type, char const* message, void* /*userdata*/) {
+            fmt::print(
+                "Device error: {} ({})\nMessage: {}\n",
+                to_string(type),
+                static_cast<int>(type),
+                message);
+        };
     wgpuDeviceSetUncapturedErrorCallback(device, device_error_cb, nullptr);
 
     // Configure surface (replaces swap chain API)
@@ -103,7 +106,8 @@ int main(int /*argc*/, char** /*argv*/)
         config.device = device;
         config.width = width;
         config.height = height;
-        config.format = wgpuSurfaceGetPreferredFormat(surface, adapter);
+        // config.format = wgpuSurfaceGetPreferredFormat(surface, adapter);
+        config.format = WGPUTextureFormat_BGRA8Unorm;
         config.usage = WGPUTextureUsage_RenderAttachment;
         config.presentMode = WGPUPresentMode_Mailbox;
 
@@ -125,15 +129,6 @@ int main(int /*argc*/, char** /*argv*/)
     {
         glfwPollEvents();
 
-        // Get the texture to render the frame to
-        WGPUSurfaceTexture curr_tex;
-        wgpuSurfaceGetCurrentTexture(surface, &curr_tex);
-        if (curr_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
-        {
-            fmt::print("Failed to get surface texture ({})\n", to_string(curr_tex.status));
-            return 1;
-        }
-
         // Create a command encoder from the device
         WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
@@ -144,6 +139,14 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
+            // Get the render target for the current frame
+            WGPUSurfaceTexture const curr_tex = get_current_texture(surface);
+            if (curr_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
+            {
+                fmt::print("Failed to get surface texture ({})\n", to_string(curr_tex.status));
+                return 1;
+            }
+
             WGPUTextureView const tex_view = make_texture_view(curr_tex);
             auto const drop_view = defer([=]() { wgpuTextureViewRelease(tex_view); });
 
@@ -161,8 +164,7 @@ int main(int /*argc*/, char** /*argv*/)
         wgpuQueueSubmit(queue, 1, &command);
 
         // Register callback that fires when queued work is done
-        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* userdata)
-        {
+        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* userdata) {
             auto const frame_info = static_cast<FrameInfo*>(userdata);
             if (frame_info->count % 100 == 0)
             {

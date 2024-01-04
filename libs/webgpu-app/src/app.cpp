@@ -59,6 +59,13 @@ void poll_events(WGPUQueue const device_queue)
 #endif
 }
 
+WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
+{
+    WGPUSurfaceTexture result;
+    wgpuSurfaceGetCurrentTexture(surface, &result);
+    return result;
+}
+
 WGPUAdapter request_adapter(
     WGPUInstance const instance,
     WGPURequestAdapterOptions const* const options)
@@ -141,7 +148,7 @@ void report_features(WGPUDevice const device)
 void report_limits(WGPUAdapter const adapter)
 {
     WGPUSupportedLimits limits{};
-    bool const ok = wgpuAdapterGetLimits(adapter, &limits);
+    [[maybe_unused]] bool const ok = wgpuAdapterGetLimits(adapter, &limits);
     assert(ok);
 
     fmt::print("Adapter limits:\n");
@@ -151,7 +158,7 @@ void report_limits(WGPUAdapter const adapter)
 void report_limits(WGPUDevice const device)
 {
     WGPUSupportedLimits limits{};
-    bool const ok = wgpuDeviceGetLimits(device, &limits);
+    [[maybe_unused]] bool const ok = wgpuDeviceGetLimits(device, &limits);
     assert(ok);
 
     fmt::print("Adapter limits:\n");
