@@ -13,32 +13,6 @@
 namespace wgpu
 {
 
-constexpr char const* shader_src = R"(
-struct VertexIn {
-    @location(0) position: vec2f,
-    @location(1) tex_coord: vec2f
-};
-
-struct VertexOut {
-    @builtin(position) position: vec4f,
-    @location(0) tex_coord: vec2f
-};
-
-@vertex
-fn vs_main(in : VertexIn) -> VertexOut {
-    return VertexOut(vec4f(in.position, 0.0, 1.0), in.tex_coord);
-}
-
-struct FragmentIn {
-    @location(0) tex_coord: vec2f
-};
-
-@fragment
-fn fs_main(in : FragmentIn) -> @location(0) vec4f {
-    return vec4f(in.tex_coord, 0.5, 1.0);
-}
-)";
-
 struct GpuContext
 {
     WGPUInstance instance;
@@ -103,7 +77,7 @@ GpuContext make_gpu_context(GLFWwindow* window)
         nullptr);
 
     // Configure surface (replaces swap chain API)
-    // ctx.surface_format = wgpuSurfaceGetPreferredFormat(result.surface, result.adapter);
+    // result.surface_format = wgpuSurfaceGetPreferredFormat(result.surface, result.adapter);
     result.surface_format = WGPUTextureFormat_BGRA8Unorm;
     {
         int width, height;
@@ -116,7 +90,6 @@ GpuContext make_gpu_context(GLFWwindow* window)
             config.height = height;
             config.format = result.surface_format;
             config.usage = WGPUTextureUsage_RenderAttachment;
-            config.presentMode = WGPUPresentMode_Mailbox;
         }
 
         wgpuSurfaceConfigure(result.surface, &config);
@@ -136,39 +109,43 @@ void release_gpu_context(GpuContext& ctx)
     ctx = {};
 }
 
-struct MeshBuffer
+struct Mesh
 {
     struct
     {
         WGPUBuffer buffer;
-        std::size_t count;
-        std::size_t stride;
-        std::size_t size() const { return count * stride; }
+        std::size_t size;
     } vertex;
 
     struct
     {
         WGPUBuffer buffer;
+        std::size_t size;
         WGPUIndexFormat format;
-        std::size_t count;
-        std::size_t stride;
-        std::size_t size() const { return count * stride; }
     } index;
+
+    struct
+    {
+        std::size_t index_start;
+        std::size_t index_count;
+        std::size_t base_vertex;
+    } part;
 };
 
-MeshBuffer make_mesh_buffer(WGPUDevice const device)
+Mesh make_mesh(WGPUDevice const device)
 {
-    static constexpr float vertices[][4]{
-        {-0.5, -0.5, 0.0, 0.0},
-        {0.5, -0.5, 1.0, 0.0},
-        {-0.5, 0.5, 0.0, 1.0},
-        {0.5, 0.5, 1.0, 1.0},
+    // clang-format off
+    static constexpr float vertices[]{
+        -0.5, -0.5, 0.0, 0.0,
+        0.5, -0.5, 1.0, 0.0,
+        -0.5, 0.5, 0.0, 1.0,
+        0.5, 0.5, 1.0, 1.0,
     };
-
-    static constexpr std::uint16_t indices[][3]{
-        {0, 1, 2},
-        {3, 2, 1},
+    static constexpr std::uint16_t indices[]{
+        0, 1, 2,
+        3, 2, 1,
     };
+    // clang-format on
 
     WGPUBuffer const vertex_buf =
         make_buffer(device, sizeof(vertices), WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
@@ -180,26 +157,45 @@ MeshBuffer make_mesh_buffer(WGPUDevice const device)
     wgpuQueueWriteBuffer(queue, vertex_buf, 0, vertices, sizeof(vertices));
     wgpuQueueWriteBuffer(queue, index_buf, 0, indices, sizeof(indices));
 
-    return MeshBuffer{
-        {
-            vertex_buf,
-            sizeof(vertices) / sizeof(vertices[0]),
-            sizeof(vertices[0]),
-        },
-        {
-            index_buf,
-            WGPUIndexFormat_Uint16,
-            sizeof(indices) / sizeof(std::uint16_t),
-            sizeof(std::uint16_t),
-        },
+    return Mesh{
+        {vertex_buf, sizeof(vertices)},
+        {index_buf, sizeof(indices), WGPUIndexFormat_Uint16},
+        {0, sizeof(indices) / sizeof(std::uint16_t), 0},
     };
 }
 
-void release_mesh_buffer(MeshBuffer const& mesh)
+void release_mesh(Mesh& mesh)
 {
     wgpuBufferRelease(mesh.vertex.buffer);
     wgpuBufferRelease(mesh.index.buffer);
+    mesh = {};
 }
+
+constexpr char const* shader_src = R"(
+struct VertexIn {
+    @location(0) position: vec2f,
+    @location(1) tex_coord: vec2f
+};
+
+struct VertexOut {
+    @builtin(position) position: vec4f,
+    @location(0) tex_coord: vec2f
+};
+
+@vertex
+fn vs_main(in : VertexIn) -> VertexOut {
+    return VertexOut(vec4f(in.position, 0.0, 1.0), in.tex_coord);
+}
+
+struct FragmentIn {
+    @location(0) tex_coord: vec2f
+};
+
+@fragment
+fn fs_main(in : FragmentIn) -> @location(0) vec4f {
+    return vec4f(in.tex_coord, 0.5, 1.0);
+}
+)";
 
 } // namespace wgpu
 
@@ -244,8 +240,9 @@ int main(int /*argc*/, char** /*argv*/)
         make_render_pipeline(ctx.device, shader, ctx.surface_format);
     auto const drop_pipeline = defer([=]() { wgpuRenderPipelineRelease(pipeline); });
 
-    // Create mesh buffers
-    MeshBuffer const mesh = make_mesh_buffer(ctx.device);
+    // Create mesh
+    Mesh mesh = make_mesh(ctx.device);
+    auto const drop_mesh = defer([&]() { release_mesh(mesh); });
 
     // Get the device's default queue
     WGPUQueue const queue = wgpuDeviceGetQueue(ctx.device);
@@ -283,16 +280,22 @@ int main(int /*argc*/, char** /*argv*/)
                     0,
                     mesh.vertex.buffer,
                     0,
-                    mesh.vertex.count * mesh.vertex.stride);
+                    mesh.vertex.size);
 
                 wgpuRenderPassEncoderSetIndexBuffer(
                     pass,
                     mesh.index.buffer,
                     mesh.index.format,
                     0,
-                    mesh.index.count * mesh.index.stride);
+                    mesh.index.size);
 
-                wgpuRenderPassEncoderDrawIndexed(pass, mesh.index.count, 1, 0, 0, 0);
+                wgpuRenderPassEncoderDrawIndexed(
+                    pass,
+                    mesh.part.index_count,
+                    1,
+                    mesh.part.index_start,
+                    mesh.part.base_vertex,
+                    0);
             }
         }
 
