@@ -1,6 +1,6 @@
 #include <cassert>
-
 #include <cstdint>
+
 #include <fmt/core.h>
 
 #include <webgpu/webgpu.h>
@@ -8,6 +8,7 @@
 #include <webgpu/app.hpp>
 #include <webgpu/glfw.h>
 
+#include "shader_src.hpp"
 #include "wgpu_config.h"
 
 namespace wgpu
@@ -130,10 +131,14 @@ struct Mesh
         std::size_t index_count;
         std::size_t base_vertex;
     } part;
+
+    bool is_valid;
 };
 
 Mesh make_mesh(WGPUDevice const device)
 {
+    Mesh result{};
+
     // clang-format off
     static constexpr float vertices[]{
         -0.5, -0.5, 0.0, 0.0,
@@ -147,21 +152,33 @@ Mesh make_mesh(WGPUDevice const device)
     };
     // clang-format on
 
-    WGPUBuffer const vertex_buf =
+    result.vertex.buffer =
         make_buffer(device, sizeof(vertices), WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
+    if(!result.vertex.buffer)
+    {
+        fmt::print("Failed to create index buffer\n");
+        return result;
+    }
+    result.vertex.size = sizeof(vertices);
 
-    WGPUBuffer const index_buf =
+    result.index.buffer =
         make_buffer(device, sizeof(indices), WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
+    if(!result.index.buffer)
+    {
+        fmt::print("Failed to create index buffer\n");
+        return result;
+    }
+    result.index.size = sizeof(indices);
+    result.index.format = WGPUIndexFormat_Uint16;
+    result.part.index_count = sizeof(indices) / sizeof(indices[0]);
 
+    // Write data to buffers
     WGPUQueue const queue = wgpuDeviceGetQueue(device);
-    wgpuQueueWriteBuffer(queue, vertex_buf, 0, vertices, sizeof(vertices));
-    wgpuQueueWriteBuffer(queue, index_buf, 0, indices, sizeof(indices));
+    wgpuQueueWriteBuffer(queue, result.vertex.buffer, 0, vertices, result.vertex.size);
+    wgpuQueueWriteBuffer(queue, result.index.buffer, 0, indices, result.index.size);
 
-    return Mesh{
-        {vertex_buf, sizeof(vertices)},
-        {index_buf, sizeof(indices), WGPUIndexFormat_Uint16},
-        {0, sizeof(indices) / sizeof(std::uint16_t), 0},
-    };
+    result.is_valid = true;
+    return result;
 }
 
 void release_mesh(Mesh& mesh)
@@ -171,31 +188,66 @@ void release_mesh(Mesh& mesh)
     mesh = {};
 }
 
-constexpr char const* shader_src = R"(
-struct VertexIn {
-    @location(0) position: vec2f,
-    @location(1) tex_coord: vec2f
+struct RenderPass
+{
+    WGPUTextureView view;
+    WGPURenderPassEncoder encoder;
+    bool is_valid;
 };
 
-struct VertexOut {
-    @builtin(position) position: vec4f,
-    @location(0) tex_coord: vec2f
-};
+RenderPass begin_render_pass(WGPUSurface const surface, WGPUCommandEncoder const encoder)
+{
+    RenderPass result{};
 
-@vertex
-fn vs_main(in : VertexIn) -> VertexOut {
-    return VertexOut(vec4f(in.position, 0.0, 1.0), in.tex_coord);
+    WGPUSurfaceTexture const srf_tex = get_current_texture(surface);
+    if (srf_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
+    {
+        fmt::print("Failed to get surface texture ({})\n", to_string(srf_tex.status));
+        return result;
+    }
+
+    result.view = make_texture_view(srf_tex);
+    if (!result.view)
+    {
+        fmt::print("Failed to create view of surface texture\n");
+        return result;
+    }
+
+    result.encoder = begin_render_pass(encoder, result.view);
+    if (!result.view)
+    {
+        fmt::print("Failed to create render pass encoder\n");
+        return result;
+    }
+
+    result.is_valid = true;
+    return result;
 }
 
-struct FragmentIn {
-    @location(0) tex_coord: vec2f
-};
-
-@fragment
-fn fs_main(in : FragmentIn) -> @location(0) vec4f {
-    return vec4f(in.tex_coord, 0.5, 1.0);
+void end_render_pass(RenderPass& pass)
+{
+    wgpuRenderPassEncoderEnd(pass.encoder);
+    wgpuTextureViewRelease(pass.view);
+    pass = {};
 }
-)";
+
+WGPURenderPipeline make_render_pipeline(
+    WGPUDevice const device,
+    char const* const shader_src,
+    WGPUTextureFormat const surface_format)
+{
+    // Create shader module
+    WGPUShaderModule const shader = make_shader_module(device, shader_src);
+    if (!shader)
+    {
+        fmt::print("Failed to create shader module\n");
+        return nullptr;
+    }
+    auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+
+    // NOTE(dr): Shader module can be released once the pipeline is created
+    return make_render_pipeline(device, shader, surface_format);
+}
 
 } // namespace wgpu
 
@@ -231,17 +283,23 @@ int main(int /*argc*/, char** /*argv*/)
     }
     auto const drop_ctx = defer([&]() { release_gpu_context(ctx); });
 
-    // Create shader module
-    WGPUShaderModule const shader = make_shader_module(ctx.device, shader_src);
-    auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
-
     // Create render pipeline
     WGPURenderPipeline const pipeline =
-        make_render_pipeline(ctx.device, shader, ctx.surface_format);
+        make_render_pipeline(ctx.device, hello_mesh::shader_src, ctx.surface_format);
+    if(!pipeline)
+    {
+        fmt::print("Failed to create render pipeline\n");
+        return 1;
+    }
     auto const drop_pipeline = defer([=]() { wgpuRenderPipelineRelease(pipeline); });
 
     // Create mesh
     Mesh mesh = make_mesh(ctx.device);
+    if(!mesh.is_valid)
+    {
+        fmt::print("Failed to create mesh\n");
+        return 1;
+    }
     auto const drop_mesh = defer([&]() { release_mesh(mesh); });
 
     // Get the device's default queue
@@ -258,39 +316,34 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            WGPUSurfaceTexture const srf_tex = get_current_texture(ctx.surface);
-            if (srf_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
+            RenderPass pass = begin_render_pass(ctx.surface, encoder);
+            if (!pass.is_valid)
             {
-                fmt::print("Failed to get surface texture ({})\n", to_string(srf_tex.status));
+                fmt::print("Failed to begin render pass\n");
                 return 1;
             }
+            auto const end_pass = defer([&]() { end_render_pass(pass); });
 
-            WGPUTextureView const tex_view = make_texture_view(srf_tex);
-            auto const drop_tex_view = defer([=]() { wgpuTextureViewRelease(tex_view); });
-
-            WGPURenderPassEncoder const pass = begin_render_pass(encoder, tex_view);
-            auto const end_pass = defer([=]() { wgpuRenderPassEncoderEnd(pass); });
-
-            wgpuRenderPassEncoderSetPipeline(pass, pipeline);
+            wgpuRenderPassEncoderSetPipeline(pass.encoder, pipeline);
 
             // Draw mesh
             {
                 wgpuRenderPassEncoderSetVertexBuffer(
-                    pass,
+                    pass.encoder,
                     0,
                     mesh.vertex.buffer,
                     0,
                     mesh.vertex.size);
 
                 wgpuRenderPassEncoderSetIndexBuffer(
-                    pass,
+                    pass.encoder,
                     mesh.index.buffer,
                     mesh.index.format,
                     0,
                     mesh.index.size);
 
                 wgpuRenderPassEncoderDrawIndexed(
-                    pass,
+                    pass.encoder,
                     mesh.part.index_count,
                     1,
                     mesh.part.index_start,
