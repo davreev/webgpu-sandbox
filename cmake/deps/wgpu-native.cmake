@@ -5,6 +5,10 @@ endif()
 set(_release_ver "v0.18.1.3")
 set(_release_arch ${CMAKE_HOST_SYSTEM_PROCESSOR})
 
+if(${_release_arch} STREQUAL "arm64")
+    set(_release_arch "aarch64")
+endif()
+
 if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
     set(_release_file "wgpu-linux-${_release_arch}-release.zip")
     set(_lib_file "libwgpu_native.a")
