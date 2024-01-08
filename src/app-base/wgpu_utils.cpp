@@ -1,4 +1,4 @@
-#include <webgpu/app.hpp>
+#include "wgpu_utils.hpp"
 
 #include <vector>
 
@@ -51,19 +51,9 @@ void report_limits(WGPULimits const& limits)
 
 } // namespace
 
-void poll_events(WGPUQueue const device_queue)
+WGPUSurface make_surface(WGPUInstance const instance, GLFWwindow* const window)
 {
-#if !defined(_EMSCRIPTEN_)
-    // NOTE(dr): This is non-standard behaviour specific to wgpu-native
-    wgpuQueueSubmit(device_queue, 0, nullptr);
-#endif
-}
-
-WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
-{
-    WGPUSurfaceTexture result;
-    wgpuSurfaceGetCurrentTexture(surface, &result);
-    return result;
+    return wgpu_make_surface_from_glfw(instance, window);
 }
 
 WGPUAdapter request_adapter(
@@ -81,16 +71,15 @@ WGPUAdapter request_adapter(
         [](WGPURequestAdapterStatus status,
            WGPUAdapter adapter,
            char const* message,
-           void* userdata)
-    {
-        auto result = static_cast<Result*>(userdata);
-        if (status == WGPURequestAdapterStatus_Success)
-            result->adapter = adapter;
-        else
-            fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
+           void* userdata) {
+            auto result = static_cast<Result*>(userdata);
+            if (status == WGPURequestAdapterStatus_Success)
+                result->adapter = adapter;
+            else
+                fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
 
-        result->is_ready = true;
-    };
+            result->is_ready = true;
+        };
 
     wgpuInstanceRequestAdapter(instance, options, callback, &result);
     assert(result.is_ready);
@@ -108,21 +97,35 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
     Result result{};
 
     auto const callback =
-        [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata)
-    {
-        auto result = static_cast<Result*>(userdata);
-        if (status == WGPURequestDeviceStatus_Success)
-            result->device = device;
-        else
-            fmt::print("Could not get WebGPU device. Message: {}\n", message);
+        [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
+            auto result = static_cast<Result*>(userdata);
+            if (status == WGPURequestDeviceStatus_Success)
+                result->device = device;
+            else
+                fmt::print("Could not get WebGPU device. Message: {}\n", message);
 
-        result->is_ready = true;
-    };
+            result->is_ready = true;
+        };
 
     wgpuAdapterRequestDevice(adapter, desc, callback, &result);
     assert(result.is_ready);
 
     return result.device;
+}
+
+WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
+{
+    WGPUSurfaceTexture result;
+    wgpuSurfaceGetCurrentTexture(surface, &result);
+    return result;
+}
+
+void poll_events(WGPUQueue const device_queue)
+{
+#if !defined(_EMSCRIPTEN_)
+    // NOTE(dr): This is non-standard behaviour specific to wgpu-native
+    wgpuQueueSubmit(device_queue, 0, nullptr);
+#endif
 }
 
 void report_features(WGPUAdapter const adapter)
@@ -175,8 +178,7 @@ void report_properties(WGPUAdapter const adapter)
     fmt::print("\tvendorName: {}\n", props.vendorName);
     fmt::print("\tdeviceID: {}\n", props.deviceID);
     fmt::print("\tvendorID: {}\n", props.vendorID);
-    if (props.driverDescription)
-        fmt::print("\tdriverDescription: {}\n", props.driverDescription);
+    if (props.driverDescription) fmt::print("\tdriverDescription: {}\n", props.driverDescription);
     fmt::print(
         "\tadapterType: {} ({})\n",
         to_string(props.adapterType),

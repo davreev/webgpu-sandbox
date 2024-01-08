@@ -1,4 +1,4 @@
-#include <webgpu/glfw.h>
+#include "wgpu_glfw.h"
 
 /*
     This is essentially a restructured version of https://github.com/eliemichel/glfw3webgpu
@@ -44,7 +44,7 @@
 #if WGPU_TARGET == WGPU_TARGET_MACOS
 typedef WGPUSurfaceDescriptorFromMetalLayer TargetSurfaceDesc;
 
-static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+static TargetSurfaceDesc target_surface_desc(GLFWwindow* window)
 {
     NSWindow* ns_window = glfwGetCocoaWindow(window);
     [ns_window.contentView setWantsLayer:YES];
@@ -66,19 +66,16 @@ static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
 #elif WGPU_TARGET == WGPU_TARGET_LINUX_X11
 typedef WGPUSurfaceDescriptorFromXlibWindow TargetSurfaceDesc;
 
-static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+static TargetSurfaceDesc target_surface_desc(GLFWwindow* window)
 {
-    Display* x11_display = glfwGetX11Display();
-    Window x11_window = glfwGetX11Window(window);
-
     // clang-format off
     return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromXlibWindow,
         },
-        .display = x11_display,
-        .window = x11_window,
+        .display = glfwGetX11Display(),
+        .window = glfwGetX11Window(window),
     };
     // clang-format on
 }
@@ -86,19 +83,16 @@ static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
 #elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
 typedef WGPUSurfaceDescriptorFromWaylandSurface TargetSurfaceDesc;
 
-static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+static TargetSurfaceDesc target_surface_desc(GLFWwindow* window)
 {
-    struct wl_display* wayland_display = glfwGetWaylandDisplay();
-    struct wl_surface* wayland_surface = glfwGetWaylandWindow(window);
-
     // clang-format off
     return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromWaylandSurface,
         },
-        .display = wayland_display,
-        .surface = wayland_surface,
+        .display = glfwGetWaylandDisplay(),
+        .surface = glfwGetWaylandWindow(window),
     };
     // clang-format on
 }
@@ -106,19 +100,16 @@ static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
 typedef WGPUSurfaceDescriptorFromWindowsHWND TargetSurfaceDesc;
 
-static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
+static TargetSurfaceDesc target_surface_desc(GLFWwindow* window)
 {
-    HWND hwnd = glfwGetWin32Window(window);
-    HINSTANCE hinstance = GetModuleHandle(NULL);
-
     // clang-format off
     return (TargetSurfaceDesc){
         .chain = {
             .next = NULL,
             .sType = WGPUSType_SurfaceDescriptorFromWindowsHWND,
         },
-        .hinstance = hinstance,
-        .hwnd = hwnd,
+        .hinstance = GetModuleHandle(NULL),
+        .hwnd = glfwGetWin32Window(window),
     };
     // clang-format on
 }
@@ -126,7 +117,7 @@ static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* window)
 #elif WGPU_TARGET == WGPU_TARGET_EMSCRIPTEN
 typedef WGPUSurfaceDescriptorFromCanvasHTMLSelector TargetSurfaceDesc;
 
-static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* /*window*/)
+static TargetSurfaceDesc target_surface_desc(GLFWwindow* /*window*/)
 {
     // clang-format off
     return (TargetSurfaceDesc){
@@ -144,9 +135,9 @@ static TargetSurfaceDesc targetSurfaceDesc(GLFWwindow* /*window*/)
 
 #endif
 
-WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window)
+WGPUSurface wgpu_make_surface_from_glfw(WGPUInstance const instance, GLFWwindow* const window)
 {
-    TargetSurfaceDesc const desc = targetSurfaceDesc(window);
+    TargetSurfaceDesc const desc = target_surface_desc(window);
     return wgpuInstanceCreateSurface(
         instance,
         &(WGPUSurfaceDescriptor){

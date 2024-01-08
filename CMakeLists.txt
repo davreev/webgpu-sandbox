@@ -16,11 +16,9 @@ list(
 # Show FetchContent download progress
 set(FETCHCONTENT_QUIET FALSE)
 
-add_subdirectory(libs/webgpu-glfw)
-add_subdirectory(libs/webgpu-app)
-
-add_subdirectory(apps/hello-webgpu)
-add_subdirectory(apps/hello-buffer)
-add_subdirectory(apps/hello-render-pass)
-add_subdirectory(apps/hello-triangle)
-add_subdirectory(apps/hello-mesh)
+add_subdirectory(src/app-base)
+add_subdirectory(src/hello-webgpu)
+add_subdirectory(src/hello-buffer)
+add_subdirectory(src/hello-render-pass)
+add_subdirectory(src/hello-triangle)
+add_subdirectory(src/hello-mesh)

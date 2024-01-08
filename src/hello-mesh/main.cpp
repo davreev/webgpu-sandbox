@@ -5,8 +5,7 @@
 
 #include <webgpu/webgpu.h>
 
-#include <webgpu/app.hpp>
-#include <webgpu/glfw.h>
+#include <wgpu_utils.hpp>
 
 #include "shader_src.hpp"
 #include "wgpu_config.h"
@@ -37,7 +36,7 @@ GpuContext make_gpu_context(GLFWwindow* window)
     }
 
     // Get WebGPU surface from GLFW window
-    result.surface = glfwGetWGPUSurface(result.instance, window);
+    result.surface = make_surface(result.instance, window);
     if (!result.surface)
     {
         fmt::print("Failed to get WebGPU surface\n");

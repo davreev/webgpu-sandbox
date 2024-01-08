@@ -1,11 +1,11 @@
 add_executable(
-    hello-mesh 
+    hello-render-pass 
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    hello-mesh 
+    hello-render-pass 
     PRIVATE 
-        webgpu-app
+        app-base
 )

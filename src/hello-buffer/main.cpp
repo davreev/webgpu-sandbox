@@ -5,7 +5,7 @@
 
 #include <webgpu/webgpu.h>
 
-#include <webgpu/app.hpp>
+#include <wgpu_utils.hpp>
 
 #include "wgpu_config.h"
 

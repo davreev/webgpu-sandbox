@@ -7,6 +7,8 @@
 
 #include <webgpu/webgpu.h>
 
+#include "wgpu_glfw.h"
+
 namespace wgpu
 {
 
@@ -42,15 +44,17 @@ template <typename Func>
     return {std::forward<Func>(func)};
 }
 
-void poll_events(WGPUQueue device_queue);
-
-WGPUSurfaceTexture get_current_texture(WGPUSurface surface);
+WGPUSurface make_surface(WGPUInstance instance, GLFWwindow* window);
 
 WGPUAdapter request_adapter(
     WGPUInstance instance,
     WGPURequestAdapterOptions const* options = nullptr);
 
 WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc = nullptr);
+
+WGPUSurfaceTexture get_current_texture(WGPUSurface surface);
+
+void poll_events(WGPUQueue device_queue);
 
 void report_features(WGPUAdapter adapter);
 

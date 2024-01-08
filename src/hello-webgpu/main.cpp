@@ -4,8 +4,7 @@
 
 #include <webgpu/webgpu.h>
 
-#include <webgpu/app.hpp>
-#include <webgpu/glfw.h>
+#include <wgpu_utils.hpp>
 
 int main(int /*argc*/, char** /*argv*/)
 {
@@ -40,7 +39,7 @@ int main(int /*argc*/, char** /*argv*/)
     auto const drop_instance = defer([=]() { wgpuInstanceRelease(instance); });
 
     // Get WebGPU surface from GLFW window
-    WGPUSurface const surface = glfwGetWGPUSurface(instance, window);
+    WGPUSurface const surface = make_surface(instance, window);
     if (!surface)
     {
         fmt::print("Failed to get WebGPU surface\n");

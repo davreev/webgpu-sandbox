@@ -1,11 +1,11 @@
 add_executable(
-    hello-buffer 
+    hello-mesh 
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    hello-buffer
-    PRIVATE 
-        webgpu-app
+    hello-mesh 
+    PRIVATE
+        app-base
 )
