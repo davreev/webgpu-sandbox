@@ -1,31 +1,27 @@
 add_library(
-    glfw-app STATIC
+    wgpu-glfw STATIC
     "wgpu_glfw.c"
 )
 
 target_compile_options(
-    glfw-app
+    wgpu-glfw
     PRIVATE
         -Wall -Wextra -Wpedantic -Werror
 )
 
 include(deps/glfw)
-target_link_libraries(
-    glfw-app
-    PUBLIC
-        glfw::glfw
-)
+target_link_libraries(wgpu-glfw PUBLIC glfw::glfw)
 
 # Link to wgpu-native if not compiling with Emscripten
 if(NOT EMSCRIPTEN)
     include(deps/wgpu-native)
-    target_link_libraries(glfw-app PUBLIC wgpu-native)
+    target_link_libraries(wgpu-glfw PUBLIC wgpu-native)
 endif()
 
 if(APPLE)
-    target_compile_options(glfw-app PRIVATE -x objective-c)
+    target_compile_options(wgpu-glfw PRIVATE -x objective-c)
     target_link_libraries(
-        glfw-app
+        wgpu-glfw
         PRIVATE 
             "-framework Cocoa" 
             "-framework CoreVideo" 
@@ -36,27 +32,26 @@ if(APPLE)
 endif()
 
 add_library(
-    app-base STATIC
+    wgpu-app STATIC
     "wgpu_utils.cpp"
 )
 
 target_include_directories(
-    app-base
+    wgpu-app
     PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}"
 )
 
 target_compile_options(
-    app-base
+    wgpu-app
     PUBLIC
         -Wall -Wextra -Wpedantic -Werror
 )
 
 include(deps/fmt)
-
 target_link_libraries(
-    app-base
+    wgpu-app
     PUBLIC
         fmt::fmt
-        glfw-app
+        wgpu-glfw
 )

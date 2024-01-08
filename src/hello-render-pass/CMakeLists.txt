@@ -7,5 +7,5 @@ add_executable(
 target_link_libraries(
     hello-render-pass 
     PRIVATE 
-        app-base
+        wgpu-app
 )

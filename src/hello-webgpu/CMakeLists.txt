@@ -6,5 +6,5 @@ add_executable(
 target_link_libraries(
     hello-webgpu
     PRIVATE
-        app-base
+        wgpu-app
 )

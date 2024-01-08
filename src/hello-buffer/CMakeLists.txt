@@ -7,5 +7,5 @@ add_executable(
 target_link_libraries(
     hello-buffer
     PRIVATE 
-        app-base
+        wgpu-app
 )

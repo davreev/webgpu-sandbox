@@ -16,7 +16,7 @@ list(
 # Show FetchContent download progress
 set(FETCHCONTENT_QUIET FALSE)
 
-add_subdirectory(src/app-base)
+add_subdirectory(src/wgpu-app)
 add_subdirectory(src/hello-webgpu)
 add_subdirectory(src/hello-buffer)
 add_subdirectory(src/hello-render-pass)
