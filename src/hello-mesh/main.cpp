@@ -351,12 +351,12 @@ int main(int /*argc*/, char** /*argv*/)
             }
         }
 
-        // Create a command via the encoder
-        WGPUCommandBuffer const command = wgpuCommandEncoderFinish(encoder, nullptr);
-        auto const drop_command = defer([=]() { wgpuCommandBufferRelease(command); });
+        // Create encoded commands
+        WGPUCommandBuffer const commands = wgpuCommandEncoderFinish(encoder, nullptr);
+        auto const drop_command = defer([=]() { wgpuCommandBufferRelease(commands); });
 
-        // Submit encoded command
-        wgpuQueueSubmit(queue, 1, &command);
+        // Submit encoded commands
+        wgpuQueueSubmit(queue, 1, &commands);
 
         // Present the render target
         wgpuSurfacePresent(ctx.surface);
