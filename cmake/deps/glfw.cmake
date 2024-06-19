@@ -6,9 +6,7 @@ include(FetchContent)
 
 FetchContent_Declare(
     glfw
-    GIT_REPOSITORY https://github.com/glfw/glfw
-    GIT_TAG 7482de6071d21db77a7236155da44c172a7f6c9e # 3.3.8
-    GIT_PROGRESS TRUE
+    URL https://github.com/glfw/glfw/releases/download/3.4/glfw-3.4.zip
 )
 
 FetchContent_MakeAvailable(glfw)
