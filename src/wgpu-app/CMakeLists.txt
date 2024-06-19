@@ -31,6 +31,20 @@ if(APPLE)
     )
 endif()
 
+# Mirror private compile definitions from glfw
+if (GLFW_BUILD_COCOA)
+    target_compile_definitions(wgpu-glfw PRIVATE _GLFW_COCOA)
+endif()
+if (GLFW_BUILD_WIN32)
+    target_compile_definitions(wgpu-glfw PRIVATE _GLFW_WIN32)
+endif()
+if (GLFW_BUILD_X11)
+    target_compile_definitions(wgpu-glfw PRIVATE _GLFW_X11)
+endif()
+if (GLFW_BUILD_WAYLAND)
+    target_compile_definitions(wgpu-glfw PRIVATE _GLFW_WAYLAND)
+endif()
+
 add_library(
     wgpu-app STATIC
     "wgpu_utils.cpp"
