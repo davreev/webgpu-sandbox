@@ -2,65 +2,56 @@ if(TARGET wgpu-native)
     return()
 endif()
 
-set(_release_ver "v0.18.1.3")
-set(_release_arch ${CMAKE_HOST_SYSTEM_PROCESSOR})
+function(import_wgpu_native)
+    set(release_ver "v0.18.1.3")
 
-if(${_release_arch} STREQUAL "arm64")
-    set(_release_arch "aarch64")
-endif()
-
-if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
-    set(_release_file "wgpu-linux-${_release_arch}-release.zip")
-    set(_lib_file "libwgpu_native.a")
-
-    if(${_release_arch} STREQUAL "aarch64")
-        set(_release_hash "6801035226d0b747f88fc667e75fd793af8779c1fde6a2fae1bffc28c1283f95")
-    elseif(${_release_arch} STREQUAL "x86_64")
-        set(_release_hash "d683abcad4b834edc0fe5d09c5919758a21fc8ee11feaf7a0d05ecbfcaace0f8")
-    else()
-        message(WARNING "Precompiled binaries for wgpu-native are not available for this platform")
+    set(release_arch ${CMAKE_HOST_SYSTEM_PROCESSOR})
+    if(${release_arch} STREQUAL "arm64")
+        set(release_arch "aarch64")
     endif()
 
-elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin")
-    set(_release_file "wgpu-macos-${_release_arch}-release.zip")
-    set(_lib_file "libwgpu_native.a")
+    set(error_msg "Precompiled binaries for wgpu-native are not available for this platform")
 
-    if(${_release_arch} STREQUAL "aarch64")
-        set(_release_hash "2ec1583558836101c3ce21e2bc90361be3e52acd72f976cea09d64b177a9eb1b")
-    elseif(${_release_arch} STREQUAL "x86_64")
-        set(_release_hash "2126b1746ea2ba8503a7f56a58fda8dcc85c8b2cf126113d4789b68db9c7e5be")
+    if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
+        set(release_file "wgpu-linux-${release_arch}-release.zip")
+        set(lib_file "libwgpu_native.a")
+
+        if(NOT(${release_arch} STREQUAL "aarch64" OR ${release_arch} STREQUAL "x86_64"))
+            message(FATAL_ERROR "${error_msg}")
+        endif()
+
+    elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin")
+        set(release_file "wgpu-macos-${release_arch}-release.zip")
+        set(lib_file "libwgpu_native.a")
+
+        if(NOT(${release_arch} STREQUAL "aarch64" OR ${release_arch} STREQUAL "x86_64"))
+            message(FATAL_ERROR "${error_msg}")
+        endif()
+
+    elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
+        set(release_file "wgpu-windows-${release_arch}-release.zip")
+        set(lib_file "libwgpu_native.lib")
+
+        if(NOT(${release_arch} STREQUAL "i686" OR ${release_arch} STREQUAL "x86_64"))
+            message(FATAL_ERROR "${error_msg}")
+        endif()
+
     else()
-        message(WARNING "Precompiled binaries for wgpu-native are not available for this platform")
+        message(FATAL_ERROR "${error_msg}")
+
     endif()
 
-elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
-    set(_release_file "wgpu-windows-${_release_arch}-release.zip")
-    set(_lib_file "libwgpu_native.lib")
+    include(FetchContent)
 
-    if(${_release_arch} STREQUAL "i686")
-        set(_release_hash "21d4b5ced28e9975c2eeab3757f217373747cc2036ec06af223ec0781d2a239d")
-    elseif(${_release_arch} STREQUAL "x86_64")
-            set(_release_hash "f2dc11534cd210c33cc517b40ca8f8ee30ce9d498ff3f2e0e5bc98000548cc5a")
-    else()
-        message(WARNING "Precompiled binaries for wgpu-native are not available for this platform")
+    FetchContent_Declare(
+        wgpu-native
+        URL "https://github.com/gfx-rs/wgpu-native/releases/download/${release_ver}/${release_file}"
+    )
+
+    FetchContent_GetProperties(wgpu-native)
+    if(NOT wgpu-native_POPULATED)
+        FetchContent_Populate(wgpu-native)
     endif()
-
-else()
-    message(WARNING "Precompiled binaries for wgpu-native are not available for this platform")
-
-endif()
-
-include(FetchContent)
-
-FetchContent_Declare(
-    wgpu-native
-    URL "https://github.com/gfx-rs/wgpu-native/releases/download/${_release_ver}/${_release_file}"
-    URL_HASH "SHA256=${_release_hash}"
-)
-
-FetchContent_GetProperties(wgpu-native)
-if(NOT wgpu-native_POPULATED)
-    FetchContent_Populate(wgpu-native)
 
     add_library(wgpu-native STATIC IMPORTED)
 
@@ -74,8 +65,10 @@ if(NOT wgpu-native_POPULATED)
     )
 
     set_target_properties(wgpu-native PROPERTIES
-        IMPORTED_LOCATION "${wgpu-native_SOURCE_DIR}/${_lib_file}"
+        IMPORTED_LOCATION "${wgpu-native_SOURCE_DIR}/${lib_file}"
         INTERFACE_INCLUDE_DIRECTORIES "${wgpu-native_SOURCE_DIR}/include"
     )
 
-endif()
+endfunction()
+
+import_wgpu_native()
