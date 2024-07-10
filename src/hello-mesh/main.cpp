@@ -265,7 +265,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello Triangle", nullptr, nullptr);
+    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello Mesh", nullptr, nullptr);
     if (!window)
     {
         fmt::print("Failed to create window\n");
