@@ -1,11 +1,11 @@
 add_executable(
-    hello-buffer 
+    clear-screen
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    hello-buffer
+    clear-screen
     PRIVATE 
         wgpu-app
 )

@@ -10,7 +10,9 @@
 #include "shader_src.hpp"
 #include "wgpu_config.h"
 
-namespace wgpu
+using namespace wgpu;
+
+namespace
 {
 
 struct GpuContext
@@ -23,80 +25,83 @@ struct GpuContext
     bool is_valid;
 };
 
+void config_surface(GpuContext& ctx, int width, int height)
+{
+    WGPUSurfaceConfiguration config{};
+    {
+        config.device = ctx.device;
+        config.width = width;
+        config.height = height;
+        config.format = get_preferred_texture_format(ctx.surface, ctx.adapter);
+        config.usage = WGPUTextureUsage_RenderAttachment;
+    }
+
+    ctx.surface_format = config.format; // Cache surface format
+    wgpuSurfaceConfigure(ctx.surface, &config);
+}
+
 GpuContext make_gpu_context(GLFWwindow* window)
 {
-    GpuContext result{};
+    GpuContext ctx{};
 
     // Create WebGPU instance
-    result.instance = wgpuCreateInstance(nullptr);
-    if (!result.instance)
+    ctx.instance = wgpuCreateInstance(nullptr);
+    if (!ctx.instance)
     {
         fmt::print("Failed to create WebGPU instance\n");
-        return result;
+        return ctx;
     }
 
     // Get WebGPU surface from GLFW window
-    result.surface = make_surface(result.instance, window);
-    if (!result.surface)
+    ctx.surface = make_surface(ctx.instance, window);
+    if (!ctx.surface)
     {
         fmt::print("Failed to get WebGPU surface\n");
-        return result;
+        return ctx;
     }
 
     // Create WGPU adapter
     WGPURequestAdapterOptions options{};
     {
-        options.compatibleSurface = result.surface;
+        options.compatibleSurface = ctx.surface;
         options.powerPreference = WGPUPowerPreference_HighPerformance;
     }
-    result.adapter = request_adapter(result.instance, &options);
-    if (!result.adapter)
+    ctx.adapter = request_adapter(ctx.instance, &options);
+    if (!ctx.adapter)
     {
         fmt::print("Failed to get WebGPU adapter\n");
-        return result;
+        return ctx;
     }
 
     // Create WebGPU device
-    result.device = request_device(result.adapter);
-    if (!result.device)
+    ctx.device = request_device(ctx.adapter);
+    if (!ctx.device)
     {
         fmt::print("Failed to get WebGPU device\n");
-        return result;
+        return ctx;
     }
 
     // Set error callback on device
     wgpuDeviceSetUncapturedErrorCallback(
-        result.device,
-        [](WGPUErrorType type, char const* message, void* /*userdata*/) {
+        ctx.device,
+        [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
             fmt::print(
-                "Device error: {} ({})\nMessage: {}\n",
+                "WebGPU device error: {} ({})\nMessage: {}\n",
                 to_string(type),
                 static_cast<int>(type),
-                message);
+                msg);
         },
         nullptr);
 
     // Configure surface (replaces swap chain API)
-    // result.surface_format = wgpuSurfaceGetPreferredFormat(result.surface, result.adapter);
-    result.surface_format = WGPUTextureFormat_BGRA8Unorm;
     {
         int width, height;
         glfwGetWindowSize(window, &width, &height);
-
-        WGPUSurfaceConfiguration config{};
-        {
-            config.device = result.device;
-            config.width = width;
-            config.height = height;
-            config.format = result.surface_format;
-            config.usage = WGPUTextureUsage_RenderAttachment;
-        }
-
-        wgpuSurfaceConfigure(result.surface, &config);
+        config_surface(ctx, width, height);
     }
 
-    result.is_valid = true;
-    return result;
+    ctx.is_valid = true;
+    return ctx;
 }
 
 void release_gpu_context(GpuContext& ctx)
@@ -153,7 +158,7 @@ Mesh make_mesh(WGPUDevice const device)
 
     result.vertex.buffer =
         make_buffer(device, sizeof(vertices), WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
-    if(!result.vertex.buffer)
+    if (!result.vertex.buffer)
     {
         fmt::print("Failed to create index buffer\n");
         return result;
@@ -162,7 +167,7 @@ Mesh make_mesh(WGPUDevice const device)
 
     result.index.buffer =
         make_buffer(device, sizeof(indices), WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
-    if(!result.index.buffer)
+    if (!result.index.buffer)
     {
         fmt::print("Failed to create index buffer\n");
         return result;
@@ -248,12 +253,10 @@ WGPURenderPipeline make_render_pipeline(
     return make_render_pipeline(device, shader, surface_format);
 }
 
-} // namespace wgpu
+} // namespace
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    using namespace wgpu;
-
     // Initialize GLFW
     if (!glfwInit())
     {
@@ -265,7 +268,8 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* const window = glfwCreateWindow(640, 480, "Hello Mesh", nullptr, nullptr);
+    GLFWwindow* const window =
+        glfwCreateWindow(800, 600, "WebGPU Sandbox: Indexed Mesh", nullptr, nullptr);
     if (!window)
     {
         fmt::print("Failed to create window\n");
@@ -285,7 +289,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create render pipeline
     WGPURenderPipeline const pipeline =
         make_render_pipeline(ctx.device, hello_mesh::shader_src, ctx.surface_format);
-    if(!pipeline)
+    if (!pipeline)
     {
         fmt::print("Failed to create render pipeline\n");
         return 1;
@@ -294,7 +298,7 @@ int main(int /*argc*/, char** /*argv*/)
 
     // Create mesh
     Mesh mesh = make_mesh(ctx.device);
-    if(!mesh.is_valid)
+    if (!mesh.is_valid)
     {
         fmt::print("Failed to create mesh\n");
         return 1;

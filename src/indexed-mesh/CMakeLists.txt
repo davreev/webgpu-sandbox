@@ -1,11 +1,11 @@
 add_executable(
-    hello-render-pass 
+    indexed-mesh 
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    hello-render-pass 
-    PRIVATE 
+    indexed-mesh 
+    PRIVATE
         wgpu-app
 )

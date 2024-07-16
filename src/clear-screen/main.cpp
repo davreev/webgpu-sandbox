@@ -6,7 +6,6 @@
 
 #include <wgpu_utils.hpp>
 
-#include "shader_src.hpp"
 #include "wgpu_config.h"
 
 using namespace wgpu;
@@ -71,6 +70,14 @@ GpuContext make_gpu_context(GLFWwindow* window)
         fmt::print("Failed to get WebGPU adapter\n");
         return ctx;
     }
+
+#if true
+    // Report adapter details
+    report_features(ctx.adapter);
+    report_limits(ctx.adapter);
+    report_properties(ctx.adapter);
+    report_surface_capabilities(ctx.surface, ctx.adapter);
+#endif
 
     // Create WebGPU device
     ctx.device = request_device(ctx.adapter);
@@ -172,7 +179,7 @@ int main(int /*argc*/, char** /*argv*/)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     GLFWwindow* const window =
-        glfwCreateWindow(800, 600, "WebGPU Sandbox: Hello Triangle", nullptr, nullptr);
+        glfwCreateWindow(800, 600, "WebGPU Sandbox: Clear Screen", nullptr, nullptr);
     if (!window)
     {
         fmt::print("Failed to create window\n");
@@ -189,19 +196,14 @@ int main(int /*argc*/, char** /*argv*/)
     }
     auto const drop_ctx = defer([&]() { release_gpu_context(ctx); });
 
-    // Create render pipeline
-    WGPURenderPipeline pipeline{};
-    {
-        // Create shader module
-        WGPUShaderModule const shader = make_shader_module(ctx.device, hello_triangle::shader_src);
-        auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
-
-        pipeline = make_render_pipeline(ctx.device, shader, ctx.surface_format);
-    }
-    auto const drop_pipeline = defer([=]() { wgpuRenderPipelineRelease(pipeline); });
-
     // Get the device's queue
     WGPUQueue const queue = wgpuDeviceGetQueue(ctx.device);
+
+    struct FrameInfo
+    {
+        std::size_t count;
+        // ...
+    } frame_info{};
 
     // Frame loop
     while (!glfwWindowShouldClose(window))
@@ -211,6 +213,10 @@ int main(int /*argc*/, char** /*argv*/)
         // Create a command encoder from the device
         WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(ctx.device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
+
+        // NOTE(dr): Can use debug markers on the encoder for printf-like debugging bw commands
+        // wgpuCommandEncoderInsertDebugMarker(encoder, "Do a thing");
+        // wgpuCommandEncoderInsertDebugMarker(encoder, "Do another thing");
 
         // Render pass
         {
@@ -222,9 +228,7 @@ int main(int /*argc*/, char** /*argv*/)
             }
             auto const end_pass = defer([&]() { end_render_pass(pass); });
 
-            // Draw triangle
-            wgpuRenderPassEncoderSetPipeline(pass.encoder, pipeline);
-            wgpuRenderPassEncoderDraw(pass.encoder, 3, 1, 0, 0);
+            // NOTE(dr): Render pass clears the screen by default
         }
 
         // Create a command via the encoder
@@ -234,7 +238,21 @@ int main(int /*argc*/, char** /*argv*/)
         // Submit encoded command
         wgpuQueueSubmit(queue, 1, &command);
 
-        // Present the render target
+        // Register callback that fires when queued work is done
+        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* userdata) {
+            auto const frame_info = static_cast<FrameInfo*>(userdata);
+            if (frame_info->count % 100 == 0)
+            {
+                fmt::print(
+                    "Finished frame {} with status: {}\n",
+                    frame_info->count,
+                    to_string(status));
+            }
+            ++frame_info->count;
+        };
+        wgpuQueueOnSubmittedWorkDone(queue, work_done_cb, &frame_info);
+
+        // Display the result
         wgpuSurfacePresent(ctx.surface);
     }
 

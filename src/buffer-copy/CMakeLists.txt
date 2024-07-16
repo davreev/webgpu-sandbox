@@ -1,11 +1,11 @@
 add_executable(
-    hello-mesh 
+    buffer-copy 
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    hello-mesh 
-    PRIVATE
+    buffer-copy
+    PRIVATE 
         wgpu-app
 )
