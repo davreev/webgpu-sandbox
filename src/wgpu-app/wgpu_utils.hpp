@@ -3,11 +3,11 @@
 #include <cassert>
 #include <utility>
 
+#include <GLFW/glfw3.h>
+
 #include <fmt/core.h>
 
 #include <webgpu/webgpu.h>
-
-#include "wgpu_glfw.h"
 
 namespace wgpu
 {
@@ -53,6 +53,8 @@ WGPUAdapter request_adapter(
 WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc = nullptr);
 
 WGPUSurfaceTexture get_current_texture(WGPUSurface surface);
+
+WGPUTextureFormat get_preferred_texture_format(WGPUSurface surface, WGPUAdapter adapter);
 
 void poll_events(WGPUQueue device_queue);
 

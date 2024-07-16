@@ -9,13 +9,16 @@ target_compile_options(
         -Wall -Wextra -Wpedantic -Werror
 )
 
-include(deps/glfw)
-target_link_libraries(wgpu-glfw PUBLIC glfw::glfw)
-
-# Link to wgpu-native if not compiling with Emscripten
+# Link to native backend if not compiling with Emscripten
 if(NOT EMSCRIPTEN)
-    include(deps/wgpu-native)
-    target_link_libraries(wgpu-glfw PUBLIC wgpu-native)
+    include("deps/glfw")
+    include("deps/wgpu-native")
+    target_link_libraries(
+        wgpu-glfw 
+        PUBLIC
+            glfw::glfw
+            wgpu-native
+        )
 endif()
 
 if(APPLE)
@@ -62,10 +65,12 @@ target_compile_options(
         -Wall -Wextra -Wpedantic -Werror
 )
 
-include(deps/fmt)
+include("deps/fmt")
+include("deps/imgui")
 target_link_libraries(
     wgpu-app
     PUBLIC
         fmt::fmt
+        imgui-wgpu
         wgpu-glfw
 )

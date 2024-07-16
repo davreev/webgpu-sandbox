@@ -2,6 +2,8 @@
 
 #include <vector>
 
+#include "wgpu_glfw.h"
+
 namespace wgpu
 {
 namespace
@@ -120,9 +122,20 @@ WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
     return result;
 }
 
+WGPUTextureFormat get_preferred_texture_format(
+    [[maybe_unused]] WGPUSurface const surface,
+    [[maybe_unused]] WGPUAdapter const adapter)
+{
+#ifdef __EMSCRIPTEN__
+    return wgpuSurfaceGetPreferredFormat(surface, adapter);
+#else
+    return WGPUTextureFormat_BGRA8Unorm;
+#endif
+}
+
 void poll_events(WGPUQueue const device_queue)
 {
-#if !defined(_EMSCRIPTEN_)
+#if !defined(__EMSCRIPTEN__)
     // NOTE(dr): This is non-standard behaviour specific to wgpu-native
     wgpuQueueSubmit(device_queue, 0, nullptr);
 #endif
