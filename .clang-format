@@ -10,6 +10,8 @@ AlignOperands: DontAlign
 AlignTrailingComments: false
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLambdasOnASingleLine: All
 AlwaysBreakTemplateDeclarations: Yes
 BinPackArguments: false
 BinPackParameters: false
@@ -26,7 +28,7 @@ BraceWrapping:
   AfterUnion: true
   BeforeCatch: true
   BeforeElse: true
-  BeforeLambdaBody: true
+  # BeforeLambdaBody: true
   BeforeWhile: false
   IndentBraces: false
   SplitEmptyFunction: true
