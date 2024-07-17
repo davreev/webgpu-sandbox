@@ -2,6 +2,12 @@
 
 #include <fmt/core.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
+#include <GLFW/glfw3.h>
+
 #include <webgpu/webgpu.h>
 
 #include <wgpu_utils.hpp>
@@ -32,6 +38,10 @@ void config_surface(GpuContext& ctx, int width, int height)
         config.height = height;
         config.format = get_preferred_texture_format(ctx.surface, ctx.adapter);
         config.usage = WGPUTextureUsage_RenderAttachment;
+#ifdef __EMSCRIPTEN__
+        // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
+        config.presentMode = WGPUPresentMode_Fifo;
+#endif
     }
 
     ctx.surface_format = config.format; // Cache surface format
@@ -50,8 +60,13 @@ GpuContext make_gpu_context(GLFWwindow* window)
         return ctx;
     }
 
+#ifdef __EMSCRIPTEN__
+    // Get WebGPU surface from the HTML canvas
+    ctx.surface = make_surface(ctx.instance, "#clear-screen");
+#else
     // Get WebGPU surface from GLFW window
     ctx.surface = make_surface(ctx.instance, window);
+#endif
     if (!ctx.surface)
     {
         fmt::print("Failed to get WebGPU surface\n");
@@ -70,14 +85,6 @@ GpuContext make_gpu_context(GLFWwindow* window)
         fmt::print("Failed to get WebGPU adapter\n");
         return ctx;
     }
-
-#if true
-    // Report adapter details
-    report_features(ctx.adapter);
-    report_limits(ctx.adapter);
-    report_properties(ctx.adapter);
-    report_surface_capabilities(ctx.surface, ctx.adapter);
-#endif
 
     // Create WebGPU device
     ctx.device = request_device(ctx.adapter);
@@ -163,6 +170,17 @@ void end_render_pass(RenderPass& pass)
     pass = {};
 }
 
+struct State
+{
+    GLFWwindow* window;
+    GpuContext gpu;
+    WGPURenderPipeline pipeline;
+    WGPUQueue queue;
+    std::size_t frame_count;
+};
+
+State state{};
+
 } // namespace
 
 int main(int /*argc*/, char** /*argv*/)
@@ -178,40 +196,43 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* const window =
-        glfwCreateWindow(800, 600, "WebGPU Sandbox: Clear Screen", nullptr, nullptr);
-    if (!window)
+    state.window = glfwCreateWindow(800, 600, "WebGPU Sandbox: Clear Screen", nullptr, nullptr);
+    if (!state.window)
     {
         fmt::print("Failed to create window\n");
         return 1;
     }
-    auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
+    auto const drop_window = defer([]() { glfwDestroyWindow(state.window); });
 
     // Create WebGPU context
-    GpuContext ctx = make_gpu_context(window);
-    if (!ctx.is_valid)
+    state.gpu = make_gpu_context(state.window);
+    if (!state.gpu.is_valid)
     {
         fmt::print("Failed to initialize WebGPU context\n");
         return 1;
     }
-    auto const drop_ctx = defer([&]() { release_gpu_context(ctx); });
+    auto const drop_gpu = defer([]() { release_gpu_context(state.gpu); });
 
-    // Get the device's queue
-    WGPUQueue const queue = wgpuDeviceGetQueue(ctx.device);
+// NOTE(dr): Report utils are only compatible with wgpu-native for now
+#if !defined(EMSCRIPTEN)
+    report_adapter_features(state.gpu.adapter);
+    report_adapter_limits(state.gpu.adapter);
+    report_adapter_properties(state.gpu.adapter);
+    report_device_features(state.gpu.device);
+    report_device_limits(state.gpu.device);
+    report_surface_capabilities(state.gpu.surface, state.gpu.adapter);
+#endif
 
-    struct FrameInfo
-    {
-        std::size_t count;
-        // ...
-    } frame_info{};
+    // Cache the device's queue
+    state.queue = wgpuDeviceGetQueue(state.gpu.device);
 
-    // Frame loop
-    while (!glfwWindowShouldClose(window))
-    {
+    // Main loop body
+    constexpr auto loop_body = []() {
         glfwPollEvents();
 
         // Create a command encoder from the device
-        WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(ctx.device, nullptr);
+        WGPUCommandEncoder const encoder =
+            wgpuDeviceCreateCommandEncoder(state.gpu.device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
 
         // NOTE(dr): Can use debug markers on the encoder for printf-like debugging bw commands
@@ -220,12 +241,8 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            RenderPass pass = begin_render_pass(ctx.surface, encoder);
-            if (!pass.is_valid)
-            {
-                fmt::print("Failed to begin render pass\n");
-                return 1;
-            }
+            RenderPass pass = begin_render_pass(state.gpu.surface, encoder);
+            assert(pass.is_valid);
             auto const end_pass = defer([&]() { end_render_pass(pass); });
 
             // NOTE(dr): Render pass clears the screen by default
@@ -236,25 +253,32 @@ int main(int /*argc*/, char** /*argv*/)
         auto const drop_command = defer([=]() { wgpuCommandBufferRelease(command); });
 
         // Submit encoded command
-        wgpuQueueSubmit(queue, 1, &command);
+        wgpuQueueSubmit(state.queue, 1, &command);
 
         // Register callback that fires when queued work is done
-        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* userdata) {
-            auto const frame_info = static_cast<FrameInfo*>(userdata);
-            if (frame_info->count % 100 == 0)
+        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* /*userdata*/) {
+            if (state.frame_count % 100 == 0)
             {
                 fmt::print(
                     "Finished frame {} with status: {}\n",
-                    frame_info->count,
+                    state.frame_count,
                     to_string(status));
             }
-            ++frame_info->count;
+            ++state.frame_count;
         };
-        wgpuQueueOnSubmittedWorkDone(queue, work_done_cb, &frame_info);
+        wgpuQueueOnSubmittedWorkDone(state.queue, work_done_cb, nullptr);
+    };
 
-        // Display the result
-        wgpuSurfacePresent(ctx.surface);
+    // Main loop
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(loop_body, 0, true);
+#else
+    while (!glfwWindowShouldClose(state.window))
+    {
+        loop_body();
+        wgpuSurfacePresent(state.gpu.surface);
     }
+#endif
 
     return 0;
 }

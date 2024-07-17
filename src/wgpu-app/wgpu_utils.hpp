@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <utility>
 
 #include <GLFW/glfw3.h>
 
@@ -9,42 +8,16 @@
 
 #include <webgpu/webgpu.h>
 
+#include "misc_utils.hpp"
+
 namespace wgpu
 {
 
-template <typename T>
-struct Range
-{
-    T* ptr;
-    std::size_t size;
-    T* begin() const { return ptr; }
-    T* end() const { return ptr + size; }
-};
-
-template <typename Func>
-struct Deferred
-{
-    template <typename Func_>
-    Deferred(Func_&& func) : func_(std::forward<Func_>(func))
-    {
-    }
-
-    Deferred(Deferred const&) = delete;
-    Deferred& operator=(Deferred const&) = delete;
-
-    ~Deferred() { func_(); }
-
-  private:
-    Func func_;
-};
-
-template <typename Func>
-[[nodiscard]] Deferred<Func> defer(Func&& func)
-{
-    return {std::forward<Func>(func)};
-}
-
+#ifdef __EMSCRIPTEN__
+WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector);
+#else
 WGPUSurface make_surface(WGPUInstance instance, GLFWwindow* window);
+#endif
 
 WGPUAdapter request_adapter(
     WGPUInstance instance,
@@ -56,17 +29,15 @@ WGPUSurfaceTexture get_current_texture(WGPUSurface surface);
 
 WGPUTextureFormat get_preferred_texture_format(WGPUSurface surface, WGPUAdapter adapter);
 
-void poll_events(WGPUQueue device_queue);
+void report_adapter_features(WGPUAdapter adapter);
 
-void report_features(WGPUAdapter adapter);
+void report_adapter_limits(WGPUAdapter adapter);
 
-void report_features(WGPUDevice device);
+void report_adapter_properties(WGPUAdapter adapter);
 
-void report_limits(WGPUAdapter adapter);
+void report_device_features(WGPUDevice device);
 
-void report_limits(WGPUDevice device);
-
-void report_properties(WGPUAdapter adapter);
+void report_device_limits(WGPUDevice device);
 
 void report_surface_capabilities(WGPUSurface surface, WGPUAdapter adapter);
 

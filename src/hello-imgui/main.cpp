@@ -2,6 +2,10 @@
 
 #include <fmt/core.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 #include <GLFW/glfw3.h>
 
 #include <webgpu/webgpu.h>
@@ -35,6 +39,10 @@ void config_surface(GpuContext& ctx, int width, int height)
         config.height = height;
         config.format = get_preferred_texture_format(ctx.surface, ctx.adapter);
         config.usage = WGPUTextureUsage_RenderAttachment;
+#ifdef __EMSCRIPTEN__
+        // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
+        config.presentMode = WGPUPresentMode_Fifo;
+#endif
     }
 
     ctx.surface_format = config.format; // Cache surface format
@@ -53,8 +61,13 @@ GpuContext make_gpu_context(GLFWwindow* window)
         return ctx;
     }
 
+#ifdef __EMSCRIPTEN__
+    // Get WebGPU surface from the HTML canvas
+    ctx.surface = make_surface(ctx.instance, "#hello-imgui");
+#else
     // Get WebGPU surface from GLFW window
     ctx.surface = make_surface(ctx.instance, window);
+#endif
     if (!ctx.surface)
     {
         fmt::print("Failed to get WebGPU surface\n");
@@ -167,6 +180,8 @@ void init_imgui(GLFWwindow* window, GpuContext const& ctx)
 
     ImGuiIO& io = ImGui::GetIO();
     {
+        io.IniFilename = nullptr;
+        io.LogFilename = nullptr;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         // ...
     }
@@ -187,18 +202,15 @@ void init_imgui(GLFWwindow* window, GpuContext const& ctx)
     ImGui_ImplWGPU_Init(&config);
 }
 
-WGPUColor to_wgpu_color(float const c[3])
+struct State
 {
-    return { c[0], c[1], c[2], 1.0 };
-}
-
-struct
-{
+    GLFWwindow* window;
     GpuContext gpu;
+    WGPUQueue queue;
     float clear_color[3]{0.8f, 0.2f, 0.4f};
-} state{};
+};
 
-void draw_ui()
+void draw_ui(State& state)
 {
     ImGui_ImplWGPU_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -231,12 +243,13 @@ void draw_ui()
     ImGui::Render();
 }
 
+// Global state
+State state{};
+
 } // namespace
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    using namespace wgpu;
-
     glfwSetErrorCallback(
         [](int errc, char const* msg) { fmt::print("GLFW error: {}\nMessage: {}\n", errc, msg); });
 
@@ -250,30 +263,29 @@ int main(int /*argc*/, char** /*argv*/)
 
     // Create GLFW window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* const window =
-        glfwCreateWindow(800, 600, "WebGPU Sandbox: Hello ImGui", nullptr, nullptr);
-    if (!window)
+    state.window = glfwCreateWindow(800, 600, "WebGPU Sandbox: Hello ImGui", nullptr, nullptr);
+    if (!state.window)
     {
         fmt::print("Failed to create window\n");
         return 1;
     }
-    auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
+    auto const drop_window = defer([]() { glfwDestroyWindow(state.window); });
 
-    glfwSetFramebufferSizeCallback(window, [](GLFWwindow* /*window*/, int width, int height) {
+    glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
         config_surface(state.gpu, width, height);
     });
 
     // Create WebGPU context
-    state.gpu = make_gpu_context(window);
+    state.gpu = make_gpu_context(state.window);
     if (!state.gpu.is_valid)
     {
         fmt::print("Failed to initialize WebGPU context\n");
         return 1;
     }
-    auto const drop_gpu_ctx = defer([&]() { release_gpu_context(state.gpu); });
+    auto const drop_gpu_ctx = defer([]() { release_gpu_context(state.gpu); });
 
     // Initialize ImGui
-    init_imgui(window, state.gpu);
+    init_imgui(state.window, state.gpu);
     auto const deinit_imgui = defer([]() {
         ImGui_ImplWGPU_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -281,18 +293,17 @@ int main(int /*argc*/, char** /*argv*/)
     });
 
     // Get the device's default queue
-    WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
+    state.queue = wgpuDeviceGetQueue(state.gpu.device);
 
-    // Frame loop
-    while (!glfwWindowShouldClose(window))
-    {
+    // Main loop
+    constexpr auto loop_body = []() {
         glfwPollEvents();
 
         // NOTE(dr): Use ImGuiIO::WantCapture* flags to determine if input events should be
         // forwarded to the main application. In general, when one of these flags is true, the
         // corresponding event should be consumed by ImGui.
 
-        draw_ui();
+        draw_ui(state);
 
         // Create a command encoder from the device
         WGPUCommandEncoder const encoder =
@@ -301,13 +312,13 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            WGPUColor const clear_color = to_wgpu_color(state.clear_color);
-            RenderPass pass = begin_render_pass(state.gpu.surface, encoder, clear_color);
-            if (!pass.is_valid)
-            {
-                fmt::print("Failed to begin render pass\n");
-                return 1;
-            }
+            constexpr auto to_wgpu_color = [](float const c[3]) -> WGPUColor {
+                return {c[0], c[1], c[2], 1.0};
+            };
+
+            RenderPass pass =
+                begin_render_pass(state.gpu.surface, encoder, to_wgpu_color(state.clear_color));
+            assert(pass.is_valid);
             auto const end_pass = defer([&]() { end_render_pass(pass); });
 
             // Issue ImGui draw commands
@@ -319,11 +330,19 @@ int main(int /*argc*/, char** /*argv*/)
         auto const drop_command = defer([=]() { wgpuCommandBufferRelease(commands); });
 
         // Submit encoded commands
-        wgpuQueueSubmit(queue, 1, &commands);
+        wgpuQueueSubmit(state.queue, 1, &commands);
+    };
 
-        // Present the render target
+    // Main loop
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(loop_body, 0, true);
+#else
+    while (!glfwWindowShouldClose(state.window))
+    {
+        loop_body();
         wgpuSurfacePresent(state.gpu.surface);
     }
+#endif
 
     return 0;
 }

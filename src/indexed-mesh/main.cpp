@@ -3,6 +3,10 @@
 
 #include <fmt/core.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 #include <webgpu/webgpu.h>
 
 #include <wgpu_utils.hpp>
@@ -34,6 +38,10 @@ void config_surface(GpuContext& ctx, int width, int height)
         config.height = height;
         config.format = get_preferred_texture_format(ctx.surface, ctx.adapter);
         config.usage = WGPUTextureUsage_RenderAttachment;
+#ifdef __EMSCRIPTEN__
+        // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
+        config.presentMode = WGPUPresentMode_Fifo;
+#endif
     }
 
     ctx.surface_format = config.format; // Cache surface format
@@ -52,8 +60,13 @@ GpuContext make_gpu_context(GLFWwindow* window)
         return ctx;
     }
 
+#ifdef __EMSCRIPTEN__
+    // Get WebGPU surface from the HTML canvas
+    ctx.surface = make_surface(ctx.instance, "#indexed-mesh");
+#else
     // Get WebGPU surface from GLFW window
     ctx.surface = make_surface(ctx.instance, window);
+#endif
     if (!ctx.surface)
     {
         fmt::print("Failed to get WebGPU surface\n");
@@ -253,6 +266,17 @@ WGPURenderPipeline make_render_pipeline(
     return make_render_pipeline(device, shader, surface_format);
 }
 
+struct State
+{
+    GLFWwindow* window;
+    GpuContext gpu;
+    WGPURenderPipeline pipeline;
+    Mesh mesh;
+    WGPUQueue queue;
+};
+
+State state{};
+
 } // namespace
 
 int main(int /*argc*/, char** /*argv*/)
@@ -268,89 +292,84 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* const window =
-        glfwCreateWindow(800, 600, "WebGPU Sandbox: Indexed Mesh", nullptr, nullptr);
-    if (!window)
+    state.window = glfwCreateWindow(800, 600, "WebGPU Sandbox: Indexed Mesh", nullptr, nullptr);
+    if (!state.window)
     {
         fmt::print("Failed to create window\n");
         return 1;
     }
-    auto const drop_window = defer([=]() { glfwDestroyWindow(window); });
+    auto const drop_window = defer([=]() { glfwDestroyWindow(state.window); });
 
     // Create WebGPU context
-    GpuContext ctx = make_gpu_context(window);
-    if (!ctx.is_valid)
+    state.gpu = make_gpu_context(state.window);
+    if (!state.gpu.is_valid)
     {
         fmt::print("Failed to initialize WebGPU context\n");
         return 1;
     }
-    auto const drop_ctx = defer([&]() { release_gpu_context(ctx); });
+    auto const drop_gpu = defer([&]() { release_gpu_context(state.gpu); });
 
     // Create render pipeline
-    WGPURenderPipeline const pipeline =
-        make_render_pipeline(ctx.device, hello_mesh::shader_src, ctx.surface_format);
-    if (!pipeline)
+    state.pipeline =
+        make_render_pipeline(state.gpu.device, hello_mesh::shader_src, state.gpu.surface_format);
+    if (!state.pipeline)
     {
         fmt::print("Failed to create render pipeline\n");
         return 1;
     }
-    auto const drop_pipeline = defer([=]() { wgpuRenderPipelineRelease(pipeline); });
+    auto const drop_pipeline = defer([=]() { wgpuRenderPipelineRelease(state.pipeline); });
 
     // Create mesh
-    Mesh mesh = make_mesh(ctx.device);
-    if (!mesh.is_valid)
+    state.mesh = make_mesh(state.gpu.device);
+    if (!state.mesh.is_valid)
     {
         fmt::print("Failed to create mesh\n");
         return 1;
     }
-    auto const drop_mesh = defer([&]() { release_mesh(mesh); });
+    auto const drop_mesh = defer([&]() { release_mesh(state.mesh); });
 
-    // Get the device's default queue
-    WGPUQueue const queue = wgpuDeviceGetQueue(ctx.device);
+    // Cache the device's default queue
+    state.queue = wgpuDeviceGetQueue(state.gpu.device);
 
-    // Frame loop
-    while (!glfwWindowShouldClose(window))
-    {
+    // Main loop body
+    constexpr auto loop_body = []() {
         glfwPollEvents();
 
         // Create a command encoder from the device
-        WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(ctx.device, nullptr);
+        WGPUCommandEncoder const encoder =
+            wgpuDeviceCreateCommandEncoder(state.gpu.device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
 
         // Render pass
         {
-            RenderPass pass = begin_render_pass(ctx.surface, encoder);
-            if (!pass.is_valid)
-            {
-                fmt::print("Failed to begin render pass\n");
-                return 1;
-            }
+            RenderPass pass = begin_render_pass(state.gpu.surface, encoder);
+            assert(pass.is_valid);
             auto const end_pass = defer([&]() { end_render_pass(pass); });
 
-            wgpuRenderPassEncoderSetPipeline(pass.encoder, pipeline);
+            wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
 
             // Draw mesh
             {
                 wgpuRenderPassEncoderSetVertexBuffer(
                     pass.encoder,
                     0,
-                    mesh.vertex.buffer,
+                    state.mesh.vertex.buffer,
                     0,
-                    mesh.vertex.size);
+                    state.mesh.vertex.size);
 
                 wgpuRenderPassEncoderSetIndexBuffer(
                     pass.encoder,
-                    mesh.index.buffer,
-                    mesh.index.format,
+                    state.mesh.index.buffer,
+                    state.mesh.index.format,
                     0,
-                    mesh.index.size);
+                    state.mesh.index.size);
 
                 wgpuRenderPassEncoderDrawIndexed(
                     pass.encoder,
-                    mesh.part.index_count,
+                    state.mesh.part.index_count,
                     1,
-                    mesh.part.index_start,
-                    mesh.part.base_vertex,
+                    state.mesh.part.index_start,
+                    state.mesh.part.base_vertex,
                     0);
             }
         }
@@ -360,11 +379,19 @@ int main(int /*argc*/, char** /*argv*/)
         auto const drop_command = defer([=]() { wgpuCommandBufferRelease(commands); });
 
         // Submit encoded commands
-        wgpuQueueSubmit(queue, 1, &commands);
+        wgpuQueueSubmit(state.queue, 1, &commands);
+    };
 
-        // Present the render target
-        wgpuSurfacePresent(ctx.surface);
+    // Main loop
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(loop_body, 0, true);
+#else
+    while (!glfwWindowShouldClose(state.window))
+    {
+        loop_body();
+        wgpuSurfacePresent(state.gpu.surface);
     }
+#endif
 
     return 0;
 }

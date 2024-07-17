@@ -3,7 +3,7 @@ if(TARGET wgpu-native)
 endif()
 
 function(import_wgpu_native)
-    set(release_ver "v0.18.1.3")
+    set(release_ver "v0.19.4.1")
 
     set(release_arch ${CMAKE_HOST_SYSTEM_PROCESSOR})
     if(${release_arch} STREQUAL "arm64")

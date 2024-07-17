@@ -2,7 +2,11 @@
 
 #include <vector>
 
+#ifdef __EMSCRIPTEN__
+#include "emscripten/emscripten.h"
+#else
 #include "wgpu_glfw.h"
+#endif
 
 namespace wgpu
 {
@@ -53,66 +57,92 @@ void report_limits(WGPULimits const& limits)
 
 } // namespace
 
+#ifdef __EMSCRIPTEN__
+WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)
+{
+    WGPUSurfaceDescriptorFromCanvasHTMLSelector next_desc{};
+    next_desc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+    next_desc.selector = canvas_selector;
+
+    WGPUSurfaceDescriptor desc{};
+    desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&next_desc);
+
+    return wgpuInstanceCreateSurface(instance, &desc);
+}
+#else
 WGPUSurface make_surface(WGPUInstance const instance, GLFWwindow* const window)
 {
     return wgpu_make_surface_from_glfw(instance, window);
 }
+#endif
 
 WGPUAdapter request_adapter(
     WGPUInstance const instance,
     WGPURequestAdapterOptions const* const options)
 {
-    struct Result
+    struct Response
     {
         WGPUAdapter adapter;
-        bool is_ready;
+        bool avail;
     };
-    Result result{};
+    Response resp{};
 
     auto const callback = //
         [](WGPURequestAdapterStatus status,
            WGPUAdapter adapter,
            char const* message,
            void* userdata) {
-            auto result = static_cast<Result*>(userdata);
+            auto resp = static_cast<Response*>(userdata);
             if (status == WGPURequestAdapterStatus_Success)
-                result->adapter = adapter;
+                resp->adapter = adapter;
             else
                 fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
 
-            result->is_ready = true;
+            resp->avail = true;
         };
 
-    wgpuInstanceRequestAdapter(instance, options, callback, &result);
-    assert(result.is_ready);
+    wgpuInstanceRequestAdapter(instance, options, callback, &resp);
 
-    return result.adapter;
+#if __EMSCRIPTEN__
+    // NOTE(dr): The call above is async when compiled with Emscripten so we wait on the result
+    while (!resp.avail)
+        emscripten_sleep(100);
+#endif
+
+    assert(resp.avail);
+    return resp.adapter;
 }
 
 WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const* const desc)
 {
-    struct Result
+    struct Response
     {
         WGPUDevice device;
-        bool is_ready;
+        bool avail;
     };
-    Result result{};
+    Response resp{};
 
     auto const callback =
         [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-            auto result = static_cast<Result*>(userdata);
+            auto resp = static_cast<Response*>(userdata);
             if (status == WGPURequestDeviceStatus_Success)
-                result->device = device;
+                resp->device = device;
             else
                 fmt::print("Could not get WebGPU device. Message: {}\n", message);
 
-            result->is_ready = true;
+            resp->avail = true;
         };
 
-    wgpuAdapterRequestDevice(adapter, desc, callback, &result);
-    assert(result.is_ready);
+    wgpuAdapterRequestDevice(adapter, desc, callback, &resp);
 
-    return result.device;
+#if __EMSCRIPTEN__
+    // NOTE(dr): The call above is async when compiled with Emscripten so we wait on the result
+    while (!resp.avail)
+        emscripten_sleep(100);
+#endif
+
+    assert(resp.avail);
+    return resp.device;
 }
 
 WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
@@ -133,15 +163,7 @@ WGPUTextureFormat get_preferred_texture_format(
 #endif
 }
 
-void poll_events(WGPUQueue const device_queue)
-{
-#if !defined(__EMSCRIPTEN__)
-    // NOTE(dr): This is non-standard behaviour specific to wgpu-native
-    wgpuQueueSubmit(device_queue, 0, nullptr);
-#endif
-}
-
-void report_features(WGPUAdapter const adapter)
+void report_adapter_features(WGPUAdapter const adapter)
 {
     std::size_t const num_features = wgpuAdapterEnumerateFeatures(adapter, nullptr);
     std::vector<WGPUFeatureName> features(num_features);
@@ -151,17 +173,7 @@ void report_features(WGPUAdapter const adapter)
     report_features({features.data(), num_features});
 }
 
-void report_features(WGPUDevice const device)
-{
-    std::size_t const num_features = wgpuDeviceEnumerateFeatures(device, nullptr);
-    std::vector<WGPUFeatureName> features(num_features);
-    wgpuDeviceEnumerateFeatures(device, features.data());
-
-    fmt::print("Device features:\n");
-    report_features({features.data(), num_features});
-}
-
-void report_limits(WGPUAdapter const adapter)
+void report_adapter_limits(WGPUAdapter const adapter)
 {
     WGPUSupportedLimits limits{};
     [[maybe_unused]] bool const ok = wgpuAdapterGetLimits(adapter, &limits);
@@ -171,17 +183,7 @@ void report_limits(WGPUAdapter const adapter)
     report_limits(limits.limits);
 }
 
-void report_limits(WGPUDevice const device)
-{
-    WGPUSupportedLimits limits{};
-    [[maybe_unused]] bool const ok = wgpuDeviceGetLimits(device, &limits);
-    assert(ok);
-
-    fmt::print("Adapter limits:\n");
-    report_limits(limits.limits);
-}
-
-void report_properties(WGPUAdapter const adapter)
+void report_adapter_properties(WGPUAdapter const adapter)
 {
     WGPUAdapterProperties props{};
     wgpuAdapterGetProperties(adapter, &props);
@@ -200,6 +202,26 @@ void report_properties(WGPUAdapter const adapter)
         "\tbackendType: {} ({})\n",
         to_string(props.backendType),
         static_cast<int>(props.backendType));
+}
+
+void report_device_features(WGPUDevice const device)
+{
+    std::size_t const num_features = wgpuDeviceEnumerateFeatures(device, nullptr);
+    std::vector<WGPUFeatureName> features(num_features);
+    wgpuDeviceEnumerateFeatures(device, features.data());
+
+    fmt::print("Device features:\n");
+    report_features({features.data(), num_features});
+}
+
+void report_device_limits(WGPUDevice const device)
+{
+    WGPUSupportedLimits limits{};
+    [[maybe_unused]] bool const ok = wgpuDeviceGetLimits(device, &limits);
+    assert(ok);
+
+    fmt::print("Adapter limits:\n");
+    report_limits(limits.limits);
 }
 
 void report_surface_capabilities(WGPUSurface const surface, WGPUAdapter const adapter)

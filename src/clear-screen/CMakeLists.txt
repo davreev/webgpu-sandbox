@@ -9,3 +9,7 @@ target_link_libraries(
     PRIVATE 
         wgpu-app
 )
+
+if(EMSCRIPTEN)
+    copy_web_src(clear-screen)
+endif()

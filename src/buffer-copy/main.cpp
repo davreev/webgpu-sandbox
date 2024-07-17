@@ -3,6 +3,12 @@
 
 #include <fmt/core.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#else
+#include <webgpu/wgpu.h>
+#endif
+
 #include <webgpu/webgpu.h>
 
 #include <wgpu_utils.hpp>
@@ -122,8 +128,11 @@ int main(int /*argc*/, char** /*argv*/)
         WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
 
-        // Add command to the encoder
+        // Issue command(s)
         wgpuCommandEncoderCopyBufferToBuffer(encoder, cmd.src_buf, 0, cmd.dst_buf, 0, 16);
+        // ...
+        // ...
+        // ...
 
         // Encode commands
         WGPUCommandBuffer const command = wgpuCommandEncoderFinish(encoder, nullptr);
@@ -164,9 +173,13 @@ int main(int /*argc*/, char** /*argv*/)
     };
     wgpuBufferMapAsync(cmd.dst_buf, WGPUMapMode_Read, 0, 16, map_cb, &cmd);
 
-    // Poll device until async work is done
-    while (cmd.Status_Pending)
-        poll_events(queue);
+    // Wait until async work is done
+#ifdef __EMSCRIPTEN__
+    while (cmd.status == CmdContext::Status_Pending)
+        emscripten_sleep(100);
+#else
+    wgpuDevicePoll(gpu.device, true, nullptr);
+#endif
 
     return (cmd.status == CmdContext::Status_Success) ? 0 : 1;
 }

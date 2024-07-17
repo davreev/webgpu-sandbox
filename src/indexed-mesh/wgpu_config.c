@@ -99,6 +99,10 @@ WGPURenderPassEncoder begin_render_pass(
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
             .clearValue = { .r = 0.15, .g = 0.15, .b = 0.15, .a = 1.0},
+#ifdef __EMSCRIPTEN__
+            // NOTE(dr): This isn't defined in wgpu-native yet (https://github.com/eliemichel/WebGPU-distribution/issues/140)
+            .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
+#endif
         },
     };
     // clang-format on
@@ -112,6 +116,5 @@ WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsa
         .usage = usage,
         .size = size,
     };
-
     return wgpuDeviceCreateBuffer(device, &desc);
 }

@@ -1,6 +1,6 @@
 # WebGPU Sandbox
 
-Experimenting with WebGPU as a native graphics API
+Experimenting with WebGPU as a cross-platform graphics API
 
 ## Build
 
@@ -20,3 +20,4 @@ cmake --build ./build [--config (Debug|Release|RelWithDebInfo)]
 - https://eliemichel.github.io/LearnWebGPU/index.html
 - https://github.com/samdauwe/webgpu-native-examples
 - https://surma.dev/things/webgpu/
+- https://github.com/kainino0x/webgpu-cross-platform-demo
