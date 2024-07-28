@@ -1,15 +1,22 @@
+set(app_name hello-imgui)
+
 add_executable(
-    hello-imgui
+    ${app_name}
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    hello-imgui
+    ${app_name}
     PRIVATE 
         wgpu-app
 )
 
 if(EMSCRIPTEN)
-    copy_web_src(hello-imgui)
+    set(
+        web_src_files
+        "${src_dir}/index.html"
+        # ...
+    )
+    copy_web_src()
 endif()

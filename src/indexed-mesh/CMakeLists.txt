@@ -1,15 +1,22 @@
+set(app_name indexed-mesh)
+
 add_executable(
-    indexed-mesh 
+    ${app_name}
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    indexed-mesh 
+    ${app_name}
     PRIVATE
         wgpu-app
 )
 
 if(EMSCRIPTEN)
-    copy_web_src(indexed-mesh)
+    set(
+        web_src_files
+        "${src_dir}/index.html"
+        # ...
+    )
+    copy_web_src()
 endif()

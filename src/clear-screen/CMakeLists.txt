@@ -1,15 +1,22 @@
+set(app_name clear-screen)
+
 add_executable(
-    clear-screen
+    ${app_name}
     main.cpp
     wgpu_config.c
 )
 
 target_link_libraries(
-    clear-screen
+    ${app_name}
     PRIVATE 
         wgpu-app
 )
 
 if(EMSCRIPTEN)
-    copy_web_src(clear-screen)
+    set(
+        web_src_files
+        "${src_dir}/index.html"
+        # ...
+    )
+    copy_web_src()
 endif()

@@ -16,7 +16,7 @@ list(
     PREPEND CMAKE_MODULE_PATH 
     "${CMAKE_CURRENT_LIST_DIR}/cmake"
 )
-include(utils)
+include(common)
 
 # Show FetchContent download progress
 set(FETCHCONTENT_QUIET FALSE)
