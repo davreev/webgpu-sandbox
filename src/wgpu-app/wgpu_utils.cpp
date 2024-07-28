@@ -83,7 +83,7 @@ WGPUAdapter request_adapter(
     struct Response
     {
         WGPUAdapter adapter;
-        bool avail;
+        bool is_ready;
     };
     Response resp{};
 
@@ -98,18 +98,18 @@ WGPUAdapter request_adapter(
             else
                 fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
 
-            resp->avail = true;
+            resp->is_ready = true;
         };
 
     wgpuInstanceRequestAdapter(instance, options, callback, &resp);
 
 #if __EMSCRIPTEN__
     // NOTE(dr): The call above is async when compiled with Emscripten so we wait on the result
-    while (!resp.avail)
+    while (!resp.is_ready)
         emscripten_sleep(100);
 #endif
 
-    assert(resp.avail);
+    assert(resp.is_ready);
     return resp.adapter;
 }
 
@@ -118,7 +118,7 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
     struct Response
     {
         WGPUDevice device;
-        bool avail;
+        bool is_ready;
     };
     Response resp{};
 
@@ -130,18 +130,18 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
             else
                 fmt::print("Could not get WebGPU device. Message: {}\n", message);
 
-            resp->avail = true;
+            resp->is_ready = true;
         };
 
     wgpuAdapterRequestDevice(adapter, desc, callback, &resp);
 
 #if __EMSCRIPTEN__
     // NOTE(dr): The call above is async when compiled with Emscripten so we wait on the result
-    while (!resp.avail)
+    while (!resp.is_ready)
         emscripten_sleep(100);
 #endif
 
-    assert(resp.avail);
+    assert(resp.is_ready);
     return resp.device;
 }
 
