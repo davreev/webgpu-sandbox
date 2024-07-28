@@ -34,8 +34,8 @@ Then use CMake to build via `emcmake`
 
 ```sh
 mkdir build 
-emcmake cmake -S . -B ./build -DCMAKE_BUILD_TYPE=<config>
-cmake --build ./build [--target <target-name>]
+emcmake cmake -S . -B ./build -G <generator>
+cmake --build ./build [--config <config>] [--target <target-name>]
 ```
 
 Output can be served locally for testing e.g.
