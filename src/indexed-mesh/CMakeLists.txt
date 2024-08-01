@@ -13,6 +13,7 @@ target_link_libraries(
 )
 
 if(EMSCRIPTEN)
+    set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
     set(
         web_src_files
         "${src_dir}/index.html"

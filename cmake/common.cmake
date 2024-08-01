@@ -9,7 +9,6 @@ endfunction()
 
 
 function(copy_web_src)
-    set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
     get_default_runtime_output_dir(dst_dir)
 
     set(files_out)

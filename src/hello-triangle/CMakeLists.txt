@@ -1,4 +1,4 @@
-set(app_name hello-triangle)
+set(app_name "hello-triangle")
 
 add_executable(
     ${app_name}
@@ -13,6 +13,7 @@ target_link_libraries(
 )
 
 if(EMSCRIPTEN)
+    set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
     set(
         web_src_files
         "${src_dir}/index.html"
