@@ -3,9 +3,25 @@
 #include <vector>
 
 #ifdef __EMSCRIPTEN__
-#include "emscripten/emscripten.h"
+#include <emscripten/emscripten.h>
 #else
 #include "wgpu_glfw.h"
+#endif
+
+#ifdef __EMSCRIPTEN__
+// clang-format off
+
+EM_JS(void, js_raise_event, (char const* name), {
+    Module.eventTarget.dispatchEvent(new Event(UTF8ToString(name)));
+})
+
+EM_ASYNC_JS(void, js_wait_for_event, (char const* name), {
+    await new Promise((resolve) => {
+        Module.eventTarget.addEventListener(UTF8ToString(name), (e) => resolve(e), {once: true});
+    });
+})
+
+// clang-format on
 #endif
 
 namespace wgpu
@@ -57,6 +73,21 @@ void report_limits(WGPULimits const& limits)
 
 } // namespace
 
+void raise_event([[maybe_unused]] char const* name)
+{
+#ifdef __EMSCRIPTEN__
+    js_raise_event(name);
+#endif
+}
+
+void wait_for_event([[maybe_unused]] char const* name)
+{
+#ifdef __EMSCRIPTEN__
+    js_wait_for_event(name);
+    emscripten_sleep(0);
+#endif
+}
+
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)
 {
@@ -80,69 +111,53 @@ WGPUAdapter request_adapter(
     WGPUInstance const instance,
     WGPURequestAdapterOptions const* const options)
 {
-    struct Response
+    struct Result
     {
         WGPUAdapter adapter;
-        bool is_ready;
-    };
-    Response resp{};
+    } result{};
 
     auto const callback = //
         [](WGPURequestAdapterStatus status,
            WGPUAdapter adapter,
            char const* message,
            void* userdata) {
-            auto resp = static_cast<Response*>(userdata);
+            auto resp = static_cast<Result*>(userdata);
             if (status == WGPURequestAdapterStatus_Success)
                 resp->adapter = adapter;
             else
                 fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
-
-            resp->is_ready = true;
+            raise_event("wgpuAdapterReady");
         };
 
-    wgpuInstanceRequestAdapter(instance, options, callback, &resp);
+    wgpuInstanceRequestAdapter(instance, options, callback, &result);
+    wait_for_event("wgpuAdapterReady");
 
-#if __EMSCRIPTEN__
-    // NOTE(dr): The call above is async when compiled with Emscripten so we wait on the result
-    while (!resp.is_ready)
-        emscripten_sleep(100);
-#endif
-
-    assert(resp.is_ready);
-    return resp.adapter;
+    assert(result.adapter);
+    return result.adapter;
 }
 
 WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const* const desc)
 {
-    struct Response
+    struct Result
     {
         WGPUDevice device;
-        bool is_ready;
-    };
-    Response resp{};
+    } result{};
 
     auto const callback =
         [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-            auto resp = static_cast<Response*>(userdata);
+            auto result = static_cast<Result*>(userdata);
             if (status == WGPURequestDeviceStatus_Success)
-                resp->device = device;
+                result->device = device;
             else
                 fmt::print("Could not get WebGPU device. Message: {}\n", message);
-
-            resp->is_ready = true;
+            raise_event("wgpuDeviceReady");
         };
 
-    wgpuAdapterRequestDevice(adapter, desc, callback, &resp);
+    wgpuAdapterRequestDevice(adapter, desc, callback, &result);
+    wait_for_event("wgpuDeviceReady");
 
-#if __EMSCRIPTEN__
-    // NOTE(dr): The call above is async when compiled with Emscripten so we wait on the result
-    while (!resp.is_ready)
-        emscripten_sleep(100);
-#endif
-
-    assert(resp.is_ready);
-    return resp.device;
+    assert(result.device);
+    return result.device;
 }
 
 WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
@@ -260,7 +275,6 @@ char const* to_string(WGPUFeatureName const value)
         "BGRA8UnormStorage",
         "Float32Filterable",
     };
-
     if (value >= std::size(names))
         return "Unknown native feature";
     else
@@ -275,7 +289,6 @@ char const* to_string(WGPUAdapterType const value)
         "CPU",
         "Unknown",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -293,7 +306,6 @@ char const* to_string(WGPUBackendType const value)
         "OpenGL",
         "OpenGLES",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -308,7 +320,6 @@ char const* to_string(WGPUErrorType const value)
         "Unknown",
         "DeviceLost",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -322,7 +333,6 @@ char const* to_string(WGPUQueueWorkDoneStatus const value)
         "DeviceLost",
         "DeviceLost",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -337,7 +347,6 @@ char const* to_string(WGPUSurfaceGetCurrentTextureStatus const value)
         "OutOfMemory",
         "DeviceLost",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -441,7 +450,6 @@ char const* to_string(WGPUTextureFormat const value)
         "ASTC12x12Unorm",
         "ASTC12x12UnormSrgb",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -455,7 +463,6 @@ char const* to_string(WGPUCompositeAlphaMode const value)
         "Unpremultiplied",
         "Inherit",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -468,7 +475,6 @@ char const* to_string(WGPUPresentMode const value)
         "Immediate",
         "Mailbox",
     };
-
     assert(value < std::size(names));
     return names[value];
 }
@@ -486,7 +492,6 @@ char const* to_string(WGPUBufferMapAsyncStatus value)
         "OffsetOutOfRange",
         "SizeOutOfRange",
     };
-
     assert(value < std::size(names));
     return names[value];
 }

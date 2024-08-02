@@ -8,10 +8,14 @@
 
 #include <webgpu/webgpu.h>
 
-#include "misc_utils.hpp"
+#include "utils.hpp"
 
 namespace wgpu
 {
+
+void raise_event(char const* name);
+
+void wait_for_event(char const* name);
 
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector);
