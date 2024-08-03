@@ -80,6 +80,42 @@ void release_gpu_context(GpuContext& ctx)
     ctx = {};
 }
 
+struct CommandContext
+{
+    enum Status
+    {
+        Status_Pending = 0,
+        Status_Success,
+        Status_Failure,
+    };
+
+    struct
+    {
+        WGPUBuffer src;
+        WGPUBuffer dst;
+        std::size_t size;
+    } buffers{};
+    Status status{};
+};
+
+CommandContext make_command_context(GpuContext const& gpu, std::size_t const buffer_size)
+{
+    CommandContext cmd{};
+    cmd.buffers = {
+        make_buffer(gpu.device, buffer_size, WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc),
+        make_buffer(gpu.device, buffer_size, WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead),
+        buffer_size,
+    };
+    return cmd;
+}
+
+void release_command_context(CommandContext& ctx)
+{
+    wgpuBufferRelease(ctx.buffers.src);
+    wgpuBufferRelease(ctx.buffers.dst);
+    ctx = {};
+}
+
 } // namespace
 
 int main(int /*argc*/, char** /*argv*/)
@@ -95,32 +131,9 @@ int main(int /*argc*/, char** /*argv*/)
     }
     auto const drop_gpu = defer([&]() { release_gpu_context(gpu); });
 
-    // Get the device's queue
-    WGPUQueue const queue = wgpuDeviceGetQueue(gpu.device);
-
-    struct CmdContext
-    {
-        enum Status
-        {
-            Status_Pending = 0,
-            Status_Success,
-            Status_Failure,
-        };
-
-        WGPUBuffer src_buf;
-        WGPUBuffer dst_buf;
-        Status status;
-
-        ~CmdContext()
-        {
-            wgpuBufferRelease(src_buf);
-            wgpuBufferRelease(dst_buf);
-        }
-    };
-
-    CmdContext cmd{};
-    cmd.src_buf = make_buffer(gpu.device, 16, WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc);
-    cmd.dst_buf = make_buffer(gpu.device, 16, WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead);
+    // Create command context
+    CommandContext cmd = make_command_context(gpu, 16);
+    auto const drop_cmd = defer([&]() { release_command_context(cmd); });
 
     // Submit command to copy data from one buffer to another
     {
@@ -128,58 +141,68 @@ int main(int /*argc*/, char** /*argv*/)
         WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
 
-        // Issue command(s)
-        wgpuCommandEncoderCopyBufferToBuffer(encoder, cmd.src_buf, 0, cmd.dst_buf, 0, 16);
-        // ...
-        // ...
-        // ...
+        // Issue command
+        wgpuCommandEncoderCopyBufferToBuffer(
+            encoder,
+            cmd.buffers.src,
+            0,
+            cmd.buffers.dst,
+            0,
+            cmd.buffers.size);
 
         // Encode commands
         WGPUCommandBuffer const command = wgpuCommandEncoderFinish(encoder, nullptr);
         auto const drop_command = defer([=]() { wgpuCommandBufferRelease(command); });
 
         // Submit the encoded command
+        WGPUQueue const queue = wgpuDeviceGetQueue(gpu.device);
         wgpuQueueSubmit(queue, 1, &command);
     }
 
     // Read dst buffer data back to host asynchronously
     auto const map_cb = [](WGPUBufferMapAsyncStatus status, void* userdata) {
-        auto cmd = static_cast<CmdContext*>(userdata);
+        auto cmd = static_cast<CommandContext*>(userdata);
 
         if (status != WGPUBufferMapAsyncStatus_Success)
         {
             fmt::print("Failed to map dst buffer ({})\n", to_string(status));
-            cmd->status = CmdContext::Status_Failure;
+            cmd->status = CommandContext::Status_Failure;
         }
         else
         {
             fmt::print("Successfully mapped dst buffer\n");
-            cmd->status = CmdContext::Status_Success;
+            cmd->status = CommandContext::Status_Success;
 
-            // Ensure dst buffer is unmapped on scope exit
-            auto const unmap_dst = defer([=]() { wgpuBufferUnmap(cmd->dst_buf); });
+            // Ensure the mapped buffer is unmapped on scope exit
+            auto const unmap_dst = defer([=]() { wgpuBufferUnmap(cmd->buffers.dst); });
 
             // Print out the mapped buffer's data
             {
+                std::size_t const n = cmd->buffers.size;
                 auto data = static_cast<std::uint8_t const*>(
-                    wgpuBufferGetConstMappedRange(cmd->dst_buf, 0, 16));
+                    wgpuBufferGetConstMappedRange(cmd->buffers.dst, 0, n));
 
                 fmt::print("dst_buf = [{}", data[0]);
-                for (int i = 1; i < 16; ++i)
+
+                for (std::size_t i = 1; i < n; ++i)
                     fmt::print(", {}", data[i]);
-                fmt::print("]\n", data[15]);
+
+                fmt::print("]\n", data[n - 1]);
             }
         }
+
+#ifdef __EMSCRIPTEN__
+        raise_event("resultReady");
+#endif
     };
-    wgpuBufferMapAsync(cmd.dst_buf, WGPUMapMode_Read, 0, 16, map_cb, &cmd);
+    wgpuBufferMapAsync(cmd.buffers.dst, WGPUMapMode_Read, 0, cmd.buffers.size, map_cb, &cmd);
 
     // Wait until async work is done
 #ifdef __EMSCRIPTEN__
-    while (cmd.status == CmdContext::Status_Pending)
-        emscripten_sleep(100);
+    wait_for_event("resultReady");
 #else
     wgpuDevicePoll(gpu.device, true, nullptr);
 #endif
 
-    return (cmd.status == CmdContext::Status_Success) ? 0 : 1;
+    return (cmd.status == CommandContext::Status_Success) ? 0 : 1;
 }
