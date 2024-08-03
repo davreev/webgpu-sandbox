@@ -2,6 +2,8 @@
 
 #include <vector>
 
+#include <fmt/core.h>
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
 #else
@@ -19,6 +21,12 @@ EM_ASYNC_JS(void, js_wait_for_event, (char const* name), {
     await new Promise((resolve) => {
         Module.eventTarget.addEventListener(UTF8ToString(name), (e) => resolve(e), {once: true});
     });
+})
+
+EM_JS(void, js_get_canvas_client_size, (int* dst_offset), {
+    const dst = new Int32Array(HEAPU8.buffer, dst_offset, 2);
+    dst[0] = Module.canvas.clientWidth;
+    dst[1] = Module.canvas.clientHeight;
 })
 
 // clang-format on
@@ -87,6 +95,16 @@ void wait_for_event([[maybe_unused]] char const* name)
     emscripten_sleep(0);
 #endif
 }
+
+#ifdef __EMSCRIPTEN__
+void get_canvas_client_size(int& width, int& height)
+{
+    int dst[2];
+    js_get_canvas_client_size(dst);
+    width = dst[0];
+    height = dst[1];
+}
+#endif
 
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)

@@ -32,6 +32,7 @@
     <body>
         <canvas class="app" id="clear-screen" oncontextmenu="event.preventDefault()"></canvas>
         <script type="text/javascript">
+            // Configure Emscripten module
             var Module = {
                 canvas: document.getElementById("clear-screen"),
                 eventTarget: new EventTarget(),
@@ -52,6 +53,7 @@
                     console.log("monitor run deps: " + left);
                 }
             };
+            
             window.onerror = function () {
                 console.log("onerror: " + event.message);
             };

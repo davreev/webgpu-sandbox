@@ -4,8 +4,6 @@
 
 #include <GLFW/glfw3.h>
 
-#include <fmt/core.h>
-
 #include <webgpu/webgpu.h>
 
 #include "utils.hpp"
@@ -16,6 +14,10 @@ namespace wgpu
 void raise_event(char const* name);
 
 void wait_for_event(char const* name);
+
+#ifdef __EMSCRIPTEN__
+void get_canvas_client_size(int& width, int& height);
+#endif
 
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector);
