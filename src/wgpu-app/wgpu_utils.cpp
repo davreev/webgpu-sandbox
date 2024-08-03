@@ -21,6 +21,14 @@ EM_ASYNC_JS(void, js_wait_for_event, (char const* name), {
     });
 })
 
+EM_JS(int, js_get_canvas_client_width, (), {
+    return Module.canvas.clientWidth;
+})
+
+EM_JS(int, js_get_canvas_client_height, (), {
+    return Module.canvas.clientHeight;
+})
+
 // clang-format on
 #endif
 
@@ -87,6 +95,14 @@ void wait_for_event([[maybe_unused]] char const* name)
     emscripten_sleep(0);
 #endif
 }
+
+#ifdef __EMSCRIPTEN__
+void get_canvas_client_size(int& width, int& height)
+{
+    width = js_get_canvas_client_width();
+    height = js_get_canvas_client_height();
+}
+#endif
 
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)

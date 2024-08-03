@@ -5,6 +5,7 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
 #endif
 
 #include <webgpu/webgpu.h>
@@ -106,10 +107,10 @@ GpuContext make_gpu_context(GLFWwindow* window)
         },
         nullptr);
 
-    // Configure surface (replaces swap chain API)
+    // Configure surface
     {
         int width, height;
-        glfwGetWindowSize(window, &width, &height);
+        glfwGetFramebufferSize(window, &width, &height);
         config_surface(ctx, width, height);
     }
 
@@ -290,15 +291,22 @@ int main(int /*argc*/, char** /*argv*/)
     auto const deinit_glfw = defer([]() { glfwTerminate(); });
 
     // Create GLFW window
+#ifdef __EMSCRIPTEN__
+    int init_width, init_height;
+    get_canvas_client_size(init_width, init_height);
+#else
+    constexpr int init_width = 800;
+    constexpr int init_height = 600;
+#endif
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    state.window = glfwCreateWindow(800, 600, "WebGPU Sandbox: Indexed Mesh", nullptr, nullptr);
+    state.window =
+        glfwCreateWindow(init_width, init_height, "WebGPU Sandbox: Indexed Mesh", nullptr, nullptr);
     if (!state.window)
     {
         fmt::print("Failed to create window\n");
         return 1;
     }
-    auto const drop_window = defer([=]() { glfwDestroyWindow(state.window); });
+    auto const drop_window = defer([]() { glfwDestroyWindow(state.window); });
 
     // Create WebGPU context
     state.gpu = make_gpu_context(state.window);
@@ -308,6 +316,25 @@ int main(int /*argc*/, char** /*argv*/)
         return 1;
     }
     auto const drop_gpu = defer([&]() { release_gpu_context(state.gpu); });
+
+#ifdef __EMSCRIPTEN__
+    // Handle canvas resize
+    emscripten_set_resize_callback(
+        EMSCRIPTEN_EVENT_TARGET_WINDOW,
+        nullptr,
+        false,
+        [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
+            int new_size[2];
+            get_canvas_client_size(new_size[0], new_size[1]);
+            glfwSetWindowSize(state.window, new_size[0], new_size[1]);
+            return true;
+        });
+#else
+    // Handle window resize
+    glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
+        config_surface(state.gpu, width, height);
+    });
+#endif
 
     // Create render pipeline
     state.pipeline =
