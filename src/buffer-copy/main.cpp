@@ -13,10 +13,11 @@
 
 #include <wgpu_utils.hpp>
 
+#include "../defer.hpp"
 #include "wgpu_config.h"
 
-using namespace wgpu;
-
+namespace wgpu::sandbox
+{
 namespace
 {
 
@@ -117,10 +118,11 @@ void release_command_context(CommandContext& ctx)
 }
 
 } // namespace
+} // namespace wgpu::sandbox
 
 int main(int /*argc*/, char** /*argv*/)
 {
-    using namespace wgpu;
+    using namespace wgpu::sandbox;
 
     // Create WebGPU context
     GpuContext gpu = make_gpu_context();
@@ -165,7 +167,7 @@ int main(int /*argc*/, char** /*argv*/)
 
         if (status != WGPUBufferMapAsyncStatus_Success)
         {
-            fmt::print("Failed to map dst buffer ({})\n", to_string(status));
+            fmt::print("Failed to map dst buffer ({})\n", wgpu::to_string(status));
             cmd->status = CommandContext::Status_Failure;
         }
         else
@@ -192,14 +194,14 @@ int main(int /*argc*/, char** /*argv*/)
         }
 
 #ifdef __EMSCRIPTEN__
-        raise_event("resultReady");
+        wgpu::raise_event("resultReady");
 #endif
     };
     wgpuBufferMapAsync(cmd.buffers.dst, WGPUMapMode_Read, 0, cmd.buffers.size, map_cb, &cmd);
 
     // Wait until async work is done
 #ifdef __EMSCRIPTEN__
-    wait_for_event("resultReady");
+    wgpu::wait_for_event("resultReady");
 #else
     wgpuDevicePoll(gpu.device, true, nullptr);
 #endif

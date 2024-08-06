@@ -14,10 +14,11 @@
 #include <wgpu_imgui.hpp>
 #include <wgpu_utils.hpp>
 
+#include "../defer.hpp"
 #include "wgpu_config.h"
 
-using namespace wgpu;
-
+namespace wgpu::sandbox
+{
 namespace
 {
 
@@ -158,7 +159,7 @@ RenderPass begin_render_pass(
     }
 
     pass.encoder = begin_render_pass(encoder, pass.view, &clear_color);
-    if (!pass.view)
+    if (!pass.encoder)
     {
         fmt::print("Failed to create render pass encoder\n");
         return pass;
@@ -248,9 +249,12 @@ void draw_ui(State& state)
 State state{};
 
 } // namespace
+} // namespace wgpu::sandbox
 
 int main(int /*argc*/, char** /*argv*/)
 {
+    using namespace wgpu::sandbox;
+
     glfwSetErrorCallback(
         [](int errc, char const* msg) { fmt::print("GLFW error: {}\nMessage: {}\n", errc, msg); });
 
@@ -265,7 +269,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    get_canvas_client_size(init_width, init_height);
+    wgpu::get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -297,7 +301,7 @@ int main(int /*argc*/, char** /*argv*/)
         false,
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
             int new_size[2];
-            get_canvas_client_size(new_size[0], new_size[1]);
+            wgpu::get_canvas_client_size(new_size[0], new_size[1]);
             glfwSetWindowSize(state.window, new_size[0], new_size[1]);
             return true;
         });

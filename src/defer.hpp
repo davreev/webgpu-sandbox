@@ -1,10 +1,8 @@
 #pragma once
 
-#include <cstddef>
-
 #include <utility>
 
-namespace wgpu
+namespace wgpu::sandbox
 {
 
 template <typename Func>
@@ -29,14 +27,5 @@ template <typename Func>
 {
     return {std::forward<Func>(func)};
 }
-
-template <typename T>
-struct Range
-{
-    T* ptr;
-    std::size_t size;
-    T* begin() const { return ptr; }
-    T* end() const { return ptr + size; }
-};
 
 } // namespace wgpu

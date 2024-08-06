@@ -13,10 +13,11 @@
 
 #include <wgpu_utils.hpp>
 
+#include "../defer.hpp"
 #include "wgpu_config.h"
 
-using namespace wgpu;
-
+namespace wgpu::sandbox
+{
 namespace
 {
 
@@ -154,7 +155,7 @@ RenderPass begin_render_pass(WGPUSurface const surface, WGPUCommandEncoder const
     }
 
     pass.encoder = begin_render_pass(encoder, pass.view);
-    if (!pass.view)
+    if (!pass.encoder)
     {
         fmt::print("Failed to create render pass encoder\n");
         return pass;
@@ -183,9 +184,12 @@ struct State
 State state{};
 
 } // namespace
+} // namespace wgpu::sandbox
 
 int main(int /*argc*/, char** /*argv*/)
 {
+    using namespace wgpu::sandbox;
+    
     glfwSetErrorCallback(
         [](int errc, char const* msg) { fmt::print("GLFW error: {}\nMessage: {}\n", errc, msg); });
 
@@ -200,7 +204,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    get_canvas_client_size(init_width, init_height);
+    wgpu::get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -232,7 +236,7 @@ int main(int /*argc*/, char** /*argv*/)
         false,
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
             int new_size[2];
-            get_canvas_client_size(new_size[0], new_size[1]);
+            wgpu::get_canvas_client_size(new_size[0], new_size[1]);
             glfwSetWindowSize(state.window, new_size[0], new_size[1]);
             return true;
         });
@@ -245,12 +249,12 @@ int main(int /*argc*/, char** /*argv*/)
 
 // NOTE(dr): Report utils are only compatible with wgpu-native for now
 #ifndef __EMSCRIPTEN__
-    report_adapter_features(state.gpu.adapter);
-    report_adapter_limits(state.gpu.adapter);
-    report_adapter_properties(state.gpu.adapter);
-    report_device_features(state.gpu.device);
-    report_device_limits(state.gpu.device);
-    report_surface_capabilities(state.gpu.surface, state.gpu.adapter);
+    wgpu::report_adapter_features(state.gpu.adapter);
+    wgpu::report_adapter_limits(state.gpu.adapter);
+    wgpu::report_adapter_properties(state.gpu.adapter);
+    wgpu::report_device_features(state.gpu.device);
+    wgpu::report_device_limits(state.gpu.device);
+    wgpu::report_surface_capabilities(state.gpu.surface, state.gpu.adapter);
 #endif
 
     // Cache the device's queue
@@ -292,7 +296,7 @@ int main(int /*argc*/, char** /*argv*/)
                 fmt::print(
                     "Finished frame {} with status: {}\n",
                     state.frame_count,
-                    to_string(status));
+                    wgpu::to_string(status));
             }
             ++state.frame_count;
         };

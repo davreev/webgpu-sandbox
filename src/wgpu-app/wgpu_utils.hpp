@@ -6,8 +6,6 @@
 
 #include <webgpu/webgpu.h>
 
-#include "utils.hpp"
-
 namespace wgpu
 {
 

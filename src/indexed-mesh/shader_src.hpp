@@ -1,6 +1,6 @@
 #pragma once
 
-namespace wgpu::hello_mesh
+namespace wgpu::sandbox
 {
 
 constexpr char const* shader_src = R"(

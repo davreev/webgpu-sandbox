@@ -12,11 +12,12 @@
 
 #include <wgpu_utils.hpp>
 
+#include "../defer.hpp"
 #include "shader_src.hpp"
 #include "wgpu_config.h"
 
-using namespace wgpu;
-
+namespace wgpu::sandbox
+{
 namespace
 {
 
@@ -279,9 +280,12 @@ struct State
 State state{};
 
 } // namespace
+} // namespace wgpu::sandbox
 
 int main(int /*argc*/, char** /*argv*/)
 {
+    using namespace wgpu::sandbox;
+
     // Initialize GLFW
     if (!glfwInit())
     {
@@ -293,7 +297,7 @@ int main(int /*argc*/, char** /*argv*/)
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    get_canvas_client_size(init_width, init_height);
+    wgpu::get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -325,7 +329,7 @@ int main(int /*argc*/, char** /*argv*/)
         false,
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
             int new_size[2];
-            get_canvas_client_size(new_size[0], new_size[1]);
+            wgpu::get_canvas_client_size(new_size[0], new_size[1]);
             glfwSetWindowSize(state.window, new_size[0], new_size[1]);
             return true;
         });
@@ -338,7 +342,7 @@ int main(int /*argc*/, char** /*argv*/)
 
     // Create render pipeline
     state.pipeline =
-        make_render_pipeline(state.gpu.device, hello_mesh::shader_src, state.gpu.surface_format);
+        make_render_pipeline(state.gpu.device, shader_src, state.gpu.surface_format);
     if (!state.pipeline)
     {
         fmt::print("Failed to create render pipeline\n");
