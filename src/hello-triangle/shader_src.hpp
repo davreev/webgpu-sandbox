@@ -1,6 +1,6 @@
 #pragma once
 
-namespace wgpu::hello_triangle
+namespace wgpu::sandbox
 {
 
 constexpr char const* shader_src = R"(
@@ -38,4 +38,4 @@ fn fs_main(in : FragmentIn) -> @location(0) vec4f {
 }
 )";
 
-}
+} // namespace wgpu::sandbox

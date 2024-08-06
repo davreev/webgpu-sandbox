@@ -37,6 +37,15 @@ namespace wgpu
 namespace
 {
 
+template <typename T>
+struct Range
+{
+    T* ptr;
+    std::size_t size;
+    T* begin() const { return ptr; }
+    T* end() const { return ptr + size; }
+};
+
 void report_features(Range<WGPUFeatureName const> const& features)
 {
     for (auto const f : features)

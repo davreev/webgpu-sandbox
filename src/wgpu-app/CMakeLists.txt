@@ -9,8 +9,8 @@ target_include_directories(
         "${CMAKE_CURRENT_LIST_DIR}"
 )
 
-include("deps/fmt")
-include("deps/imgui")
+include(deps/fmt)
+include(deps/imgui)
 target_link_libraries(
     wgpu-app
     PUBLIC
@@ -44,8 +44,8 @@ if(NOT EMSCRIPTEN)
         "wgpu_glfw.c"
     )
 
-    include("deps/glfw")
-    include("deps/wgpu-native")
+    include(deps/glfw)
+    include(deps/wgpu-native)
     target_link_libraries(
         wgpu-glfw 
         PUBLIC
