@@ -54,12 +54,12 @@ python -m http.server
 
 ## Refs
 
--   https://www.w3.org/TR/webgpu
--   https://www.w3.org/TR/WGSL
--   https://eliemichel.github.io/LearnWebGPU/index.html
--   https://surma.dev/things/webgpu/
--   https://developer.chrome.com/blog/webgpu-cross-platform/
--   https://github.com/samdauwe/webgpu-native-examples
--   https://github.com/kainino0x/webgpu-cross-platform-demo
--   https://github.com/ocornut/imgui/tree/master/examples/example_glfw_wgpu
--   https://sotrh.github.io/learn-wgpu
+- https://www.w3.org/TR/webgpu
+- https://www.w3.org/TR/WGSL
+- https://eliemichel.github.io/LearnWebGPU/index.html
+- https://surma.dev/things/webgpu/
+- https://developer.chrome.com/blog/webgpu-cross-platform/
+- https://github.com/samdauwe/webgpu-native-examples
+- https://github.com/kainino0x/webgpu-cross-platform-demo
+- https://github.com/ocornut/imgui/tree/master/examples/example_glfw_wgpu
+- https://sotrh.github.io/learn-wgpu

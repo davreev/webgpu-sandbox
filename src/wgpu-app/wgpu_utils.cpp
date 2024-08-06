@@ -187,13 +187,6 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
     return result.device;
 }
 
-WGPUSurfaceTexture get_current_texture(WGPUSurface const surface)
-{
-    WGPUSurfaceTexture result;
-    wgpuSurfaceGetCurrentTexture(surface, &result);
-    return result;
-}
-
 WGPUTextureFormat get_preferred_texture_format(
     [[maybe_unused]] WGPUSurface const surface,
     [[maybe_unused]] WGPUAdapter const adapter)

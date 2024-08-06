@@ -50,8 +50,8 @@ target_link_libraries(
 
 # Link to native backend if not compiling with Emscripten
 if(NOT EMSCRIPTEN)
-    include("deps/glfw")
-    include("deps/wgpu-native")
+    include(deps/glfw)
+    include(deps/wgpu-native)
     target_link_libraries(
         imgui-wgpu
         PRIVATE

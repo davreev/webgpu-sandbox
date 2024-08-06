@@ -1,5 +1,4 @@
 #include "wgpu_config.h"
-#include "webgpu/webgpu.h"
 
 WGPUShaderModule make_shader_module(WGPUDevice const device, char const* const shader_src)
 {

@@ -14,8 +14,9 @@
 #include <wgpu_imgui.hpp>
 #include <wgpu_utils.hpp>
 
-#include "../defer.hpp"
 #include "wgpu_config.h"
+
+#include "../shared/defer.hpp"
 
 namespace wgpu::sandbox
 {

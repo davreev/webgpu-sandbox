@@ -29,8 +29,6 @@ WGPUAdapter request_adapter(
 
 WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc = nullptr);
 
-WGPUSurfaceTexture get_current_texture(WGPUSurface surface);
-
 WGPUTextureFormat get_preferred_texture_format(WGPUSurface surface, WGPUAdapter adapter);
 
 void report_adapter_features(WGPUAdapter adapter);
