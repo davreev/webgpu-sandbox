@@ -4,9 +4,12 @@ Experimenting with WebGPU as a cross-platform graphics API
 
 ## Build
 
-### Native
+This project can be built to run natively or in a web browser. Build instructions vary slightly for
+each target.
 
-For native builds, use CMake
+### Native Build
+
+Build via `cmake`
 
 > ⚠️ Currently only tested with Clang and GCC. MSVC is not supported.
 
@@ -16,9 +19,10 @@ cmake -S . -B ./build -G <generator>
 cmake --build ./build [--config <config>] [--target <target-name>]
 ```
 
-### Web
+### Web Build
 
-For web builds, download the [Emscripten SDK](https://github.com/emscripten-core/emsdk) and dot source the appropriate setup script
+Download the [Emscripten SDK](https://github.com/emscripten-core/emsdk) and dot source the
+appropriate setup script
 
 ```sh
 # Bash
@@ -30,7 +34,7 @@ $EMSDK_DIR="absolute/path/of/emsdk/root"
 . ./emsc-setup.ps1
 ```
 
-Then use CMake to build via `emcmake`
+Then build via `emcmake`
 
 ```sh
 mkdir build 
@@ -54,3 +58,4 @@ python -m http.server
 - https://github.com/samdauwe/webgpu-native-examples
 - https://github.com/kainino0x/webgpu-cross-platform-demo
 - https://github.com/ocornut/imgui/tree/master/examples/example_glfw_wgpu
+- https://sotrh.github.io/learn-wgpu
