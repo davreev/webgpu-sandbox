@@ -2,7 +2,8 @@
 <html lang="en-us">
     <head>
         <meta charset="utf-8" />
-        <title>WebGPU Sandbox: Clear Screen</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"/>
+        <title>WebGPU Sandbox: Hello Triangle</title>
         <style type="text/css">
             body {
                 margin: 0;
@@ -30,11 +31,11 @@
         </style>
     </head>
     <body>
-        <canvas class="app" id="clear-screen" oncontextmenu="event.preventDefault()"></canvas>
+        <canvas class="app" id="hello-triangle" oncontextmenu="event.preventDefault()"></canvas>
         <script type="text/javascript">
             // Configure Emscripten module
             var Module = {
-                canvas: document.getElementById("clear-screen"),
+                canvas: document.getElementById("hello-triangle"),
                 eventTarget: new EventTarget(),
                 preRun: [],
                 postRun: [],
@@ -53,11 +54,11 @@
                     console.log("monitor run deps: " + left);
                 }
             };
-            
+
             window.onerror = function () {
                 console.log("onerror: " + event.message);
             };
         </script>
-        <script src="clear-screen.js"></script>
+        <script src="hello-triangle.js"></script>
     </body>
 </html>

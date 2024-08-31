@@ -125,7 +125,7 @@ WGPUPipelineLayout render_material_make_pipeline_layout(
 WGPURenderPipeline render_material_make_pipeline(
     WGPUDevice const device,
     WGPUPipelineLayout const layout,
-    char const* shader_src,
+    char const* const shader_src,
     WGPUTextureFormat const surface_format,
     WGPUTextureFormat const depth_format)
 {
@@ -137,7 +137,7 @@ WGPURenderPipeline render_material_make_pipeline(
         },
         {
             .format = WGPUVertexFormat_Float32x2,
-            .offset = 3 * sizeof(float),
+            .offset = sizeof(float[3]),
             .shaderLocation = 1,
         },
     };
@@ -163,7 +163,7 @@ WGPURenderPipeline render_material_make_pipeline(
                 .entryPoint = "vs_main",
                 .bufferCount = 1,
                 .buffers = &(WGPUVertexBufferLayout){
-                    .arrayStride = 5 * sizeof(float),
+                    .arrayStride = sizeof(float[5]),
                     .attributeCount = sizeof(attrs) / sizeof(*attrs),
                     .attributes = attrs,
                 },
@@ -315,29 +315,27 @@ WGPURenderPassEncoder render_pass_begin(
     WGPUTextureView const surface_view,
     WGPUTextureView const depth_view)
 {
-    // clang-format off
     return wgpuCommandEncoderBeginRenderPass(
-        encoder, 
+        encoder,
         &(WGPURenderPassDescriptor){
             .colorAttachmentCount = 1,
-            .colorAttachments = &(WGPURenderPassColorAttachment){
-                .view = surface_view,
-                .loadOp = WGPULoadOp_Clear,
-                .storeOp = WGPUStoreOp_Store,
-                .clearValue = { .r = 0.15, .g = 0.15, .b = 0.15, .a = 1.0},
+            .colorAttachments =
+                &(WGPURenderPassColorAttachment){
+                    .view = surface_view,
+                    .loadOp = WGPULoadOp_Clear,
+                    .storeOp = WGPUStoreOp_Store,
+                    .clearValue = {.r = 0.15, .g = 0.15, .b = 0.15, .a = 1.0},
 #ifdef __EMSCRIPTEN__
-                // NOTE(dr): This isn't defined in wgpu-native as of v0.19.4.1 but is required for
-                // web builds. See related issue:
-                // https://github.com/eliemichel/WebGPU-distribution/issues/14
-                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
+                    // NOTE(dr): This isn't defined in wgpu-native as of v0.19.4.1 but is required
+                    // for web builds. See related issue:
+                    // https://github.com/eliemichel/WebGPU-distribution/issues/14
+                    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
 #endif
-            },
+                },
             .depthStencilAttachment = &(WGPURenderPassDepthStencilAttachment){
                 .view = depth_view,
                 .depthLoadOp = WGPULoadOp_Clear,
                 .depthStoreOp = WGPUStoreOp_Store,
                 .depthClearValue = 1.0f,
-            }
-        });
-    // clang-format on
+            }});
 }

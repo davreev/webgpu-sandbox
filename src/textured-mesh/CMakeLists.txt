@@ -35,7 +35,6 @@ endif()
 #
 
 set(src_dir "${CMAKE_CURRENT_LIST_DIR}")
-set(gen_dir "${CMAKE_CURRENT_BINARY_DIR}/gen")
 get_default_runtime_output_dir(runtime_output_dir)
 
 set(
@@ -46,7 +45,6 @@ set(
 )
 
 if(EMSCRIPTEN)
-    set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
     set(
         web_src_files
         "${src_dir}/web/index.html"

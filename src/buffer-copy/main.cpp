@@ -1,5 +1,4 @@
 #include <cassert>
-#include <cstdint>
 
 #include <fmt/core.h>
 
@@ -11,10 +10,13 @@
 
 #include <webgpu/webgpu.h>
 
+#include <dr/basic_types.hpp>
+#include <dr/defer.hpp>
+
 #include <wgpu_utils.hpp>
 
-#include "../defer.hpp"
-#include "wgpu_config.h"
+#include "../shared/dr_shim.hpp"
+#include "utils.h"
 
 namespace wgpu::sandbox
 {
@@ -26,95 +28,107 @@ struct GpuContext
     WGPUInstance instance;
     WGPUAdapter adapter;
     WGPUDevice device;
-    bool is_valid;
+
+    static GpuContext make()
+    {
+        GpuContext result{};
+
+        // Create WebGPU instance
+        result.instance = wgpuCreateInstance(nullptr);
+        assert(result.instance);
+
+        // Create WGPU adapter
+        result.adapter = request_adapter(result.instance);
+        assert(result.adapter);
+
+        // Create WebGPU device
+        result.device = request_device(result.adapter);
+        assert(result.device);
+
+        // Set error callback on device
+        wgpuDeviceSetUncapturedErrorCallback(
+            result.device,
+            [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
+                fmt::print(
+                    "WebGPU device error: {} ({})\nMessage: {}\n",
+                    to_string(type),
+                    static_cast<int>(type),
+                    msg);
+            },
+            nullptr);
+
+        return result;
+    }
+
+    static void release(GpuContext& ctx)
+    {
+        wgpuDeviceRelease(ctx.device);
+        wgpuAdapterRelease(ctx.adapter);
+        wgpuInstanceRelease(ctx.instance);
+        ctx = {};
+    }
 };
 
-GpuContext make_gpu_context()
+struct Kernel
 {
-    GpuContext ctx{};
+    WGPUBuffer src_buf;
+    WGPUBuffer dst_buf;
 
-    // Create WebGPU instance
-    ctx.instance = wgpuCreateInstance(nullptr);
-    if (!ctx.instance)
+    static Kernel make(WGPUDevice const device, usize const buffer_size)
     {
-        fmt::print("Failed to create WebGPU instance\n");
-        return ctx;
+        Kernel result{};
+
+        result.src_buf = make_buffer(
+            device,
+            buffer_size,
+            WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc);
+
+        result.dst_buf = make_buffer(
+            device,
+            buffer_size,
+            WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead);
+
+        return result;
     }
 
-    // Create WGPU adapter
-    ctx.adapter = request_adapter(ctx.instance);
-    if (!ctx.adapter)
+    static void release(Kernel& kernel)
     {
-        fmt::print("Failed to get WebGPU adapter\n");
-        return ctx;
+        wgpuBufferRelease(kernel.src_buf);
+        wgpuBufferRelease(kernel.dst_buf);
+        kernel = {};
     }
 
-    // Create WebGPU device
-    ctx.device = request_device(ctx.adapter);
-    if (!ctx.device)
+    void dispatch(WGPUCommandEncoder const encoder)
     {
-        fmt::print("Failed to get WebGPU device\n");
-        return ctx;
+        wgpuCommandEncoderCopyBufferToBuffer(
+            encoder,
+            src_buf,
+            0,
+            dst_buf,
+            0,
+            wgpuBufferGetSize(src_buf));
     }
-
-    // Set error callback on device
-    wgpuDeviceSetUncapturedErrorCallback(
-        ctx.device,
-        [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
-            fmt::print(
-                "WebGPU device error: {} ({})\nMessage: {}\n",
-                to_string(type),
-                static_cast<int>(type),
-                msg);
-        },
-        nullptr);
-
-    ctx.is_valid = true;
-    return ctx;
-}
-
-void release_gpu_context(GpuContext& ctx)
-{
-    wgpuDeviceRelease(ctx.device);
-    wgpuAdapterRelease(ctx.adapter);
-    wgpuInstanceRelease(ctx.instance);
-    ctx = {};
-}
-
-struct CommandContext
-{
-    enum Status
-    {
-        Status_Pending = 0,
-        Status_Success,
-        Status_Failure,
-    };
-
-    struct
-    {
-        WGPUBuffer src;
-        WGPUBuffer dst;
-        std::size_t size;
-    } buffers{};
-    Status status{};
 };
 
-CommandContext make_command_context(GpuContext const& gpu, std::size_t const buffer_size)
+struct AppState
 {
-    CommandContext cmd{};
-    cmd.buffers = {
-        make_buffer(gpu.device, buffer_size, WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc),
-        make_buffer(gpu.device, buffer_size, WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead),
-        buffer_size,
-    };
-    return cmd;
+    GpuContext gpu;
+    Kernel kernel;
+};
+
+AppState state{};
+
+void init_app()
+{
+    state.gpu = GpuContext::make();
+    state.kernel = Kernel::make(state.gpu.device, 16);
 }
 
-void release_command_context(CommandContext& ctx)
+void deinit_app()
 {
-    wgpuBufferRelease(ctx.buffers.src);
-    wgpuBufferRelease(ctx.buffers.dst);
-    ctx = {};
+    GpuContext::release(state.gpu);
+    Kernel::release(state.kernel);
+    state = {};
 }
 
 } // namespace
@@ -124,87 +138,70 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    // Create WebGPU context
-    GpuContext gpu = make_gpu_context();
-    if (!gpu.is_valid)
-    {
-        fmt::print("Failed to initialize WebGPU context\n");
-        return 1;
-    }
-    auto const drop_gpu = defer([&]() { release_gpu_context(gpu); });
+    init_app();
+    auto const _ = defer([]() { deinit_app(); });
 
-    // Create command context
-    CommandContext cmd = make_command_context(gpu, 16);
-    auto const drop_cmd = defer([&]() { release_command_context(cmd); });
-
-    // Submit command to copy data from one buffer to another
+    // Dispatch command(s)
     {
         // Create command encoder
-        WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
+        WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(
+            state.gpu.device,
+            nullptr);
+        assert(encoder);
         auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
 
-        // Issue command
-        wgpuCommandEncoderCopyBufferToBuffer(
-            encoder,
-            cmd.buffers.src,
-            0,
-            cmd.buffers.dst,
-            0,
-            cmd.buffers.size);
+        state.kernel.dispatch(encoder);
 
-        // Encode commands
-        WGPUCommandBuffer const command = wgpuCommandEncoderFinish(encoder, nullptr);
-        auto const drop_command = defer([=]() { wgpuCommandBufferRelease(command); });
+        // Create encoded commands
+        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(encoder, nullptr);
+        assert(cmds);
+        auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
         // Submit the encoded command
-        WGPUQueue const queue = wgpuDeviceGetQueue(gpu.device);
-        wgpuQueueSubmit(queue, 1, &command);
+        WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
+        wgpuQueueSubmit(queue, 1, &cmds);
     }
 
-    // Read dst buffer data back to host asynchronously
-    auto const map_cb = [](WGPUBufferMapAsyncStatus status, void* userdata) {
-        auto cmd = static_cast<CommandContext*>(userdata);
+    // Read dst buffer back to host asynchronously
+    {
+        constexpr auto map_cb = [](WGPUBufferMapAsyncStatus status, void* userdata) {
+            assert(status == WGPUBufferMapAsyncStatus_Success);
 
-        if (status != WGPUBufferMapAsyncStatus_Success)
-        {
-            fmt::print("Failed to map dst buffer ({})\n", wgpu::to_string(status));
-            cmd->status = CommandContext::Status_Failure;
-        }
-        else
-        {
-            fmt::print("Successfully mapped dst buffer\n");
-            cmd->status = CommandContext::Status_Success;
-
-            // Ensure the mapped buffer is unmapped on scope exit
-            auto const unmap_dst = defer([=]() { wgpuBufferUnmap(cmd->buffers.dst); });
+            WGPUBuffer buf = static_cast<WGPUBuffer>(userdata);
+            auto const unmap = defer([=]() { wgpuBufferUnmap(buf); });
 
             // Print out the mapped buffer's data
             {
-                std::size_t const n = cmd->buffers.size;
-                auto data = static_cast<std::uint8_t const*>(
-                    wgpuBufferGetConstMappedRange(cmd->buffers.dst, 0, n));
+                usize const size = wgpuBufferGetSize(buf);
+                auto data = static_cast<u8 const*>(wgpuBufferGetConstMappedRange(buf, 0, size));
 
-                fmt::print("dst_buf = [{}", data[0]);
-
-                for (std::size_t i = 1; i < n; ++i)
+                fmt::print("dst buf: [{}", data[0]);
+                for (usize i = 1; i < size; ++i)
                     fmt::print(", {}", data[i]);
-
-                fmt::print("]\n", data[n - 1]);
+                fmt::print("]\n");
             }
-        }
 
 #ifdef __EMSCRIPTEN__
-        wgpu::raise_event("resultReady");
+            wgpu::raise_event("resultReady");
 #endif
-    };
-    wgpuBufferMapAsync(cmd.buffers.dst, WGPUMapMode_Read, 0, cmd.buffers.size, map_cb, &cmd);
+        };
 
-    // Wait until async work is done
+        auto const dst_buf = state.kernel.dst_buf;
+        wgpuBufferMapAsync(
+            dst_buf,
+            WGPUMapMode_Read,
+            0,
+            wgpuBufferGetSize(dst_buf),
+            map_cb,
+            dst_buf);
+
+        // Wait until async work is done
 #ifdef __EMSCRIPTEN__
-    wgpu::wait_for_event("resultReady");
+        wgpu::wait_for_event("resultReady");
 #else
-    wgpuDevicePoll(gpu.device, true, nullptr);
+        wgpuDevicePoll(state.gpu.device, true, nullptr);
 #endif
+    }
 
-    return (cmd.status == CommandContext::Status_Success) ? 0 : 1;
+    return 0;
 }

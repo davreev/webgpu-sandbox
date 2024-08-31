@@ -7,15 +7,16 @@
 #include <emscripten/html5.h>
 #endif
 
-#include <GLFW/glfw3.h>
-
 #include <webgpu/webgpu.h>
+
+#include <dr/basic_types.hpp>
+#include <dr/defer.hpp>
 
 #include <wgpu_utils.hpp>
 
-#include "../defer.hpp"
+#include "../shared/dr_shim.hpp"
+#include "graphics.h"
 #include "shader_src.hpp"
-#include "wgpu_config.h"
 
 namespace wgpu::sandbox
 {
@@ -29,177 +30,133 @@ struct GpuContext
     WGPUAdapter adapter;
     WGPUDevice device;
     WGPUTextureFormat surface_format;
-    bool is_valid;
-};
 
-void config_surface(GpuContext& ctx, int width, int height)
-{
-    WGPUSurfaceConfiguration config{};
+    static GpuContext make(GLFWwindow* const window)
     {
-        config.device = ctx.device;
-        config.width = width;
-        config.height = height;
-        config.format = get_preferred_texture_format(ctx.surface, ctx.adapter);
-        config.usage = WGPUTextureUsage_RenderAttachment;
-#ifdef __EMSCRIPTEN__
-        // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
-        config.presentMode = WGPUPresentMode_Fifo;
-#endif
-    }
+        GpuContext result{};
 
-    ctx.surface_format = config.format; // Cache surface format
-    wgpuSurfaceConfigure(ctx.surface, &config);
-}
-
-GpuContext make_gpu_context(GLFWwindow* window)
-{
-    GpuContext ctx{};
-
-    // Create WebGPU instance
-    ctx.instance = wgpuCreateInstance(nullptr);
-    if (!ctx.instance)
-    {
-        fmt::print("Failed to create WebGPU instance\n");
-        return ctx;
-    }
+        // Create WebGPU instance
+        result.instance = wgpuCreateInstance(nullptr);
+        assert(result.instance);
 
 #ifdef __EMSCRIPTEN__
-    // Get WebGPU surface from the HTML canvas
-    ctx.surface = make_surface(ctx.instance, "#hello-triangle");
+        // Get WebGPU surface from the HTML canvas
+        result.surface = make_surface(result.instance, "#hello-triangle");
 #else
-    // Get WebGPU surface from GLFW window
-    ctx.surface = make_surface(ctx.instance, window);
+        // Get WebGPU surface from GLFW window
+        result.surface = make_surface(result.instance, window);
 #endif
-    if (!ctx.surface)
-    {
-        fmt::print("Failed to get WebGPU surface\n");
-        return ctx;
+        assert(result.surface);
+
+        // Create WGPU adapter
+        WGPURequestAdapterOptions options{};
+        {
+            options.compatibleSurface = result.surface;
+            options.powerPreference = WGPUPowerPreference_HighPerformance;
+        }
+        result.adapter = request_adapter(result.instance, &options);
+        assert(result.adapter);
+
+        // Create WebGPU device
+        result.device = request_device(result.adapter);
+        assert(result.device);
+
+        // Set error callback on device
+        wgpuDeviceSetUncapturedErrorCallback(
+            result.device,
+            [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
+                fmt::print(
+                    "WebGPU device error: {} ({})\nMessage: {}\n",
+                    to_string(type),
+                    static_cast<int>(type),
+                    msg);
+            },
+            nullptr);
+
+        result.surface_format = get_preferred_texture_format(result.surface, result.adapter);
+        result.config_surface(window);
+
+        return result;
     }
 
-    // Create WGPU adapter
-    WGPURequestAdapterOptions options{};
+    static void release(GpuContext& ctx)
     {
-        options.compatibleSurface = ctx.surface;
-        options.powerPreference = WGPUPowerPreference_HighPerformance;
-    }
-    ctx.adapter = request_adapter(ctx.instance, &options);
-    if (!ctx.adapter)
-    {
-        fmt::print("Failed to get WebGPU adapter\n");
-        return ctx;
+        wgpuSurfaceUnconfigure(ctx.surface);
+        wgpuDeviceRelease(ctx.device);
+        wgpuAdapterRelease(ctx.adapter);
+        wgpuSurfaceRelease(ctx.surface);
+        wgpuInstanceRelease(ctx.instance);
+        ctx = {};
     }
 
-    // Create WebGPU device
-    ctx.device = request_device(ctx.adapter);
-    if (!ctx.device)
+    void config_surface(int const width, int const height)
     {
-        fmt::print("Failed to get WebGPU device\n");
-        return ctx;
+        WGPUSurfaceConfiguration config{};
+        {
+            config.device = device;
+            config.width = width;
+            config.height = height;
+            config.format = surface_format;
+            config.usage = WGPUTextureUsage_RenderAttachment;
+#ifdef __EMSCRIPTEN__
+            // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
+            config.presentMode = WGPUPresentMode_Fifo;
+#endif
+        }
+        wgpuSurfaceConfigure(surface, &config);
     }
 
-    // Set error callback on device
-    wgpuDeviceSetUncapturedErrorCallback(
-        ctx.device,
-        [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
-            fmt::print(
-                "WebGPU device error: {} ({})\nMessage: {}\n",
-                to_string(type),
-                static_cast<int>(type),
-                msg);
-        },
-        nullptr);
-
-    // Configure surface
+    void config_surface(GLFWwindow* const window)
     {
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
-        config_surface(ctx, width, height);
+        config_surface(width, height);
     }
-
-    ctx.is_valid = true;
-    return ctx;
-}
-
-void release_gpu_context(GpuContext& ctx)
-{
-    wgpuSurfaceUnconfigure(ctx.surface);
-    wgpuDeviceRelease(ctx.device);
-    wgpuAdapterRelease(ctx.adapter);
-    wgpuSurfaceRelease(ctx.surface);
-    wgpuInstanceRelease(ctx.instance);
-    ctx = {};
-}
+};
 
 struct RenderPass
 {
-    WGPUTextureView view;
     WGPURenderPassEncoder encoder;
-    bool is_valid;
+    WGPUTextureView surface_view;
+
+    static RenderPass begin(WGPUSurface const surface, WGPUCommandEncoder const encoder)
+    {
+        RenderPass result{};
+
+        result.surface_view = surface_make_view(surface);
+        assert(result.surface_view);
+
+        result.encoder = render_pass_begin(encoder, result.surface_view);
+        assert(result.encoder);
+
+        return result;
+    }
+
+    static void end(RenderPass& pass)
+    {
+        wgpuRenderPassEncoderEnd(pass.encoder);
+        wgpuTextureViewRelease(pass.surface_view);
+        pass = {};
+    }
 };
 
-RenderPass begin_render_pass(WGPUSurface const surface, WGPUCommandEncoder const encoder)
-{
-    RenderPass pass{};
-
-    WGPUSurfaceTexture const srf_tex = get_current_texture(surface);
-    if (srf_tex.status != WGPUSurfaceGetCurrentTextureStatus_Success)
-    {
-        fmt::print("Failed to get surface texture ({})\n", to_string(srf_tex.status));
-        return pass;
-    }
-
-    pass.view = make_texture_view(srf_tex);
-    if (!pass.view)
-    {
-        fmt::print("Failed to create view of surface texture\n");
-        return pass;
-    }
-
-    pass.encoder = begin_render_pass(encoder, pass.view);
-    if (!pass.encoder)
-    {
-        fmt::print("Failed to create render pass encoder\n");
-        return pass;
-    }
-
-    pass.is_valid = true;
-    return pass;
-}
-
-void end_render_pass(RenderPass& pass)
-{
-    wgpuRenderPassEncoderEnd(pass.encoder);
-    wgpuTextureViewRelease(pass.view);
-    pass = {};
-}
-
-struct State
+struct AppState
 {
     GLFWwindow* window;
     GpuContext gpu;
     WGPURenderPipeline pipeline;
-    WGPUQueue queue;
 };
 
-State state{};
+AppState state{};
 
-} // namespace
-} // namespace wgpu::sandbox
-
-int main(int /*argc*/, char** /*argv*/)
+void init_app()
 {
-    using namespace wgpu::sandbox;
-
     glfwSetErrorCallback(
         [](int errc, char const* msg) { fmt::print("GLFW error: {}\nMessage: {}\n", errc, msg); });
 
     // Initialize GLFW
-    if (!glfwInit())
-    {
-        fmt::print("Failed to initialize GLFW\n");
-        return 1;
-    }
-    auto const deinit_glfw = defer([]() { glfwTerminate(); });
+    bool const glfw_ok = glfwInit();
+    assert(glfw_ok);
 
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
@@ -216,81 +173,79 @@ int main(int /*argc*/, char** /*argv*/)
         "WebGPU Sandbox: Hello Triangle",
         nullptr,
         nullptr);
-    if (!state.window)
-    {
-        fmt::print("Failed to create window\n");
-        return 1;
-    }
-    auto const drop_window = defer([]() { glfwDestroyWindow(state.window); });
+    assert(state.window);
 
     // Create WebGPU context
-    state.gpu = make_gpu_context(state.window);
-    if (!state.gpu.is_valid)
-    {
-        fmt::print("Failed to initialize WebGPU context\n");
-        return 1;
-    }
-    auto const drop_gpu = defer([]() { release_gpu_context(state.gpu); });
+    state.gpu = GpuContext::make(state.window);
 
 #ifdef __EMSCRIPTEN__
     // Handle canvas resize
-    emscripten_set_resize_callback(
-        EMSCRIPTEN_EVENT_TARGET_WINDOW,
-        nullptr,
-        false,
+    auto constexpr resize_cb =
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
-            int new_size[2];
-            wgpu::get_canvas_client_size(new_size[0], new_size[1]);
-            glfwSetWindowSize(state.window, new_size[0], new_size[1]);
-            return true;
-        });
+        int w, h;
+        wgpu::get_canvas_client_size(w, h);
+        glfwSetWindowSize(state.window, w, h);
+        return true;
+    };
+    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, resize_cb);
 #else
-    // Handle window resize
+    // Handle framebuffer resize
     glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
-        config_surface(state.gpu, width, height);
+        state.gpu.config_surface(width, height);
     });
 #endif
 
     // Create render pipeline
-    {
-        // Create shader module
-        WGPUShaderModule const shader =
-            make_shader_module(state.gpu.device, shader_src);
-        auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+    state.pipeline = make_render_pipeline(state.gpu.device, shader_src, state.gpu.surface_format);
+}
 
-        state.pipeline = make_render_pipeline(state.gpu.device, shader, state.gpu.surface_format);
-    }
-    auto const drop_pipeline = defer([=]() { wgpuRenderPipelineRelease(state.pipeline); });
+void deinit_app()
+{
+    wgpuRenderPipelineRelease(state.pipeline);
+    GpuContext::release(state.gpu);
+    glfwDestroyWindow(state.window);
+    glfwTerminate();
+    state = {};
+}
 
-    // Cache the device's default queue
-    state.queue = wgpuDeviceGetQueue(state.gpu.device);
+} // namespace
+} // namespace wgpu::sandbox
+
+int main(int /*argc*/, char** /*argv*/)
+{
+    using namespace wgpu::sandbox;
+
+    init_app();
+    auto const _ = defer([]() { deinit_app(); });
 
     // Main loop body
     constexpr auto loop_body = []() {
         glfwPollEvents();
 
         // Create a command encoder from the device
-        WGPUCommandEncoder const encoder =
-            wgpuDeviceCreateCommandEncoder(state.gpu.device, nullptr);
-        auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
+        WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
+            state.gpu.device,
+            nullptr);
+        assert(cmd_encoder);
+        auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
         // Render pass
         {
-            RenderPass pass = begin_render_pass(state.gpu.surface, encoder);
-            assert(pass.is_valid);
-            auto const end_pass = defer([&]() { end_render_pass(pass); });
+            RenderPass pass = RenderPass::begin(state.gpu.surface, cmd_encoder);
+            auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
-            // Draw triangle
             wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
             wgpuRenderPassEncoderDraw(pass.encoder, 3, 1, 0, 0);
         }
 
         // Create encoded commands
-        WGPUCommandBuffer const command = wgpuCommandEncoderFinish(encoder, nullptr);
-        auto const drop_command = defer([=]() { wgpuCommandBufferRelease(command); });
+        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+        assert(cmds);
+        auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
-        // Submit encoded command
-        wgpuQueueSubmit(state.queue, 1, &command);
+        // Submit encoded commands
+        WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
+        wgpuQueueSubmit(queue, 1, &cmds);
     };
 
     // Main loop

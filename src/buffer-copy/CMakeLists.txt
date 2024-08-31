@@ -3,21 +3,29 @@ set(app_name buffer-copy)
 add_executable(
     ${app_name} 
     main.cpp
-    wgpu_config.c
+    utils.c
 )
 
+include(deps/dr)
 target_link_libraries(
     ${app_name}
-    PRIVATE 
+    PRIVATE
+        dr::dr
         wgpu-app
 )
 
+#
+# Post-build commands
+#
+
+set(src_dir "${CMAKE_CURRENT_LIST_DIR}")
+get_default_runtime_output_dir(runtime_output_dir)
+
 if(EMSCRIPTEN)
-    set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
     set(
         web_src_files
-        "${src_dir}/index.html"
+        "${src_dir}/web/index.html"
         # ...
     )
-    copy_web_src()
+    copy_web_files()
 endif()

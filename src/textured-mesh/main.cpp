@@ -568,6 +568,7 @@ int main(int /*argc*/, char** /*argv*/)
         WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
             state.gpu.device,
             nullptr);
+        assert(cmd_encoder);
         auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
         WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);

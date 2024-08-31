@@ -1,5 +1,5 @@
-#ifndef WGPU_CONFIG_INCLUDED
-#define WGPU_CONFIG_INCLUDED
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <webgpu/webgpu.h>
 
@@ -14,4 +14,4 @@ WGPUBuffer make_buffer(WGPUDevice device, size_t size, WGPUBufferUsageFlags usag
 } // extern "C"
 #endif
 
-#endif // WGPU_CONFIG_INCLUDED
+#endif // UTILS_H
