@@ -199,38 +199,41 @@ struct RenderMesh
 
     static RenderMesh make_box(WGPUDevice const device)
     {
+        // clang-format off
         // Format: x, y, z, u, v
         static constexpr f32 vertices[][5]{
+            // -x
             {0.0, 0.0, 0.0, 0.25, 1.0},
             {0.0, 1.0, 0.0, 0.0, 1.0},
             {0.0, 0.0, 1.0, 0.25, 0.5},
             {0.0, 1.0, 1.0, 0.0, 0.5},
-
+            // +x
             {1.0, 0.0, 0.0, 0.25, 1.0},
             {1.0, 1.0, 0.0, 0.5, 1.0},
             {1.0, 0.0, 1.0, 0.25, 0.5},
             {1.0, 1.0, 1.0, 0.5, 0.5},
-
+            // -y
             {0.0, 0.0, 0.0, 0.5, 1.0},
             {1.0, 0.0, 0.0, 0.75, 1.0},
             {0.0, 0.0, 1.0, 0.5, 0.5},
             {1.0, 0.0, 1.0, 0.75, 0.5},
-
+            // +y
             {0.0, 1.0, 0.0, 1.0, 1.0},
             {1.0, 1.0, 0.0, 0.75, 1.0},
             {0.0, 1.0, 1.0, 1.0, 0.5},
             {1.0, 1.0, 1.0, 0.75, 0.5},
-
+            // -z
             {0.0, 0.0, 0.0, 0.25, 0.5},
             {1.0, 0.0, 0.0, 0.0, 0.5},
             {0.0, 1.0, 0.0, 0.25, 0.0},
             {1.0, 1.0, 0.0, 0.0, 0.0},
-
+            // +z
             {0.0, 0.0, 1.0, 0.25, 0.5},
             {1.0, 0.0, 1.0, 0.5, 0.5},
             {0.0, 1.0, 1.0, 0.25, 0.0},
             {1.0, 1.0, 1.0, 0.5, 0.0},
         };
+        // clang-format on
 
         static constexpr u16 faces[][3]{
             {1, 0, 2},
@@ -283,10 +286,13 @@ struct RenderMaterial
     static inline WGPURenderPipeline pipeline{};
     struct
     {
-        WGPUTexture texture;
-        WGPUTextureView view;
-        WGPUSampler sampler;
-    } static inline color{};
+        struct
+        {
+            WGPUTexture texture;
+            WGPUTextureView view;
+            WGPUSampler sampler;
+        } color_map;
+    } static inline defaults{};
 
     struct Instance
     {
@@ -323,8 +329,8 @@ struct RenderMaterial
             bind_group = render_material_make_bind_group(
                 device,
                 bind_group_layout,
-                color.view,
-                color.sampler,
+                defaults.color_map.view,
+                defaults.color_map.sampler,
                 uniform_buffer);
             assert(bind_group);
         }
@@ -350,6 +356,7 @@ struct RenderMaterial
         bind_group_layout = render_material_make_bind_group_layout(device);
         pipeline_layout = render_material_make_pipeline_layout(device, bind_group_layout);
 
+        // Init pipeline
         {
             ShaderAsset const& asset = load_shader_asset("assets/shaders/unlit_texture.wgsl");
             pipeline = render_material_make_pipeline(
@@ -361,28 +368,30 @@ struct RenderMaterial
             assert(pipeline);
         }
 
+        // Init default resources
         {
+            auto& color_map = defaults.color_map;
             ImageAsset const& asset = load_image_asset("assets/images/cube-faces.png");
-            color.texture = render_material_make_color_texture(
+            color_map.texture = render_material_make_color_texture(
                 device,
                 asset.data.get(),
                 asset.width,
                 asset.height,
                 asset.stride,
-                &color.view,
-                &color.sampler);
-            assert(color.texture);
-            assert(color.view);
-            assert(color.sampler);
+                &color_map.view,
+                &color_map.sampler);
+            assert(color_map.texture);
+            assert(color_map.view);
+            assert(color_map.sampler);
         }
     }
 
     static void deinit()
     {
-        wgpuTextureViewRelease(color.view);
-        wgpuSamplerRelease(color.sampler);
-        wgpuTextureRelease(color.texture);
-        color = {};
+        wgpuTextureViewRelease(defaults.color_map.view);
+        wgpuSamplerRelease(defaults.color_map.sampler);
+        wgpuTextureRelease(defaults.color_map.texture);
+        defaults = {};
 
         wgpuRenderPipelineRelease(pipeline);
         pipeline = {};
