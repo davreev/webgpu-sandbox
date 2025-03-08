@@ -17,7 +17,7 @@ function(import_wgpu_native)
         set(lib_file "libwgpu_native.a")
 
         if(NOT(${release_arch} STREQUAL "aarch64" OR ${release_arch} STREQUAL "x86_64"))
-            message(FATAL_ERROR "${error_msg}")
+            message(FATAL_ERROR ${error_msg})
         endif()
 
     elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin")
@@ -25,7 +25,7 @@ function(import_wgpu_native)
         set(lib_file "libwgpu_native.a")
 
         if(NOT(${release_arch} STREQUAL "aarch64" OR ${release_arch} STREQUAL "x86_64"))
-            message(FATAL_ERROR "${error_msg}")
+            message(FATAL_ERROR ${error_msg})
         endif()
 
     elseif(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
@@ -33,11 +33,11 @@ function(import_wgpu_native)
         set(lib_file "libwgpu_native.lib")
 
         if(NOT(${release_arch} STREQUAL "i686" OR ${release_arch} STREQUAL "x86_64"))
-            message(FATAL_ERROR "${error_msg}")
+            message(FATAL_ERROR ${error_msg})
         endif()
 
     else()
-        message(FATAL_ERROR "${error_msg}")
+        message(FATAL_ERROR ${error_msg})
 
     endif()
 
@@ -53,16 +53,16 @@ function(import_wgpu_native)
         FetchContent_Populate(wgpu-native)
     endif()
 
-    add_library(wgpu-native STATIC IMPORTED)
-
     # WebGPU headers are expected to be located at webgpu/*.h
-    file(
-        COPY 
-            "${wgpu-native_SOURCE_DIR}/webgpu.h" 
-            "${wgpu-native_SOURCE_DIR}/wgpu.h"
-        DESTINATION 
-            "${wgpu-native_SOURCE_DIR}/include/webgpu"
-    )
+    set(header_files "${wgpu-native_SOURCE_DIR}/webgpu.h" "${wgpu-native_SOURCE_DIR}/wgpu.h")
+    foreach(file ${header_files})
+        if(EXISTS ${file})
+            file(COPY ${file} DESTINATION "${wgpu-native_SOURCE_DIR}/include/webgpu")
+            file(REMOVE ${file})
+        endif()
+    endforeach()
+
+    add_library(wgpu-native STATIC IMPORTED)
 
     set_target_properties(wgpu-native PROPERTIES
         IMPORTED_LOCATION "${wgpu-native_SOURCE_DIR}/${lib_file}"
