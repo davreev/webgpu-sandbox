@@ -38,7 +38,6 @@
                 canvas: document.getElementById("textured-mesh"),
                 eventTarget: new EventTarget(),
                 preRun: [],
-                postRun: [],
                 print: function (text) {
                     text = Array.prototype.slice.call(arguments).join(' ');
                     console.log(text);
@@ -47,12 +46,6 @@
                     text = Array.prototype.slice.call(arguments).join(' ');
                     console.error(text);
                 },
-                setStatus: function (text) {
-                    console.log("status: " + text);
-                },
-                monitorRunDependencies: function (left) {
-                    console.log("monitor run deps: " + left);
-                }
             };
             
             window.onerror = function () {
