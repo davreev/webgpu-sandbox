@@ -118,14 +118,14 @@ struct RenderPass
     WGPURenderPassEncoder encoder;
     WGPUTextureView surface_view;
 
-    static RenderPass begin(WGPUSurface const surface, WGPUCommandEncoder const encoder)
+    static RenderPass begin(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
     {
         RenderPass result{};
 
         result.surface_view = surface_make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(encoder, result.surface_view);
+        result.encoder = render_pass_begin(cmd_encoder, result.surface_view);
         assert(result.encoder);
 
         return result;
@@ -236,7 +236,7 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            RenderPass pass = RenderPass::begin(state.gpu.surface, cmd_encoder);
+            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface);
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
             // NOTE(dr): Render pass clears the screen by default

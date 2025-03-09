@@ -118,6 +118,32 @@ struct GpuContext
     }
 };
 
+struct RenderPass
+{
+    WGPURenderPassEncoder encoder;
+    WGPUTextureView surface_view;
+
+    static RenderPass begin(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
+    {
+        RenderPass result{};
+
+        result.surface_view = surface_make_view(surface);
+        assert(result.surface_view);
+
+        result.encoder = render_pass_begin(cmd_encoder, result.surface_view);
+        assert(result.encoder);
+
+        return result;
+    }
+
+    static void end(RenderPass& pass)
+    {
+        wgpuRenderPassEncoderEnd(pass.encoder);
+        wgpuTextureViewRelease(pass.surface_view);
+        pass = {};
+    }
+};
+
 struct RenderMesh
 {
     static constexpr WGPUIndexFormat index_format{WGPUIndexFormat_Uint16};
@@ -204,32 +230,6 @@ struct RenderMesh
     void dispatch_draw(WGPURenderPassEncoder const encoder) const
     {
         wgpuRenderPassEncoderDrawIndexed(encoder, index_count, 1, 0, 0, 0);
-    }
-};
-
-struct RenderPass
-{
-    WGPURenderPassEncoder encoder;
-    WGPUTextureView surface_view;
-
-    static RenderPass begin(WGPUSurface const surface, WGPUCommandEncoder const encoder)
-    {
-        RenderPass result{};
-
-        result.surface_view = surface_make_view(surface);
-        assert(result.surface_view);
-
-        result.encoder = render_pass_begin(encoder, result.surface_view);
-        assert(result.encoder);
-
-        return result;
-    }
-
-    static void end(RenderPass& pass)
-    {
-        wgpuRenderPassEncoderEnd(pass.encoder);
-        wgpuTextureViewRelease(pass.surface_view);
-        pass = {};
     }
 };
 
@@ -329,7 +329,7 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            RenderPass pass = RenderPass::begin(state.gpu.surface, cmd_encoder);
+            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface);
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
             wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);

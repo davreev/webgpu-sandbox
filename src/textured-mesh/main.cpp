@@ -122,6 +122,35 @@ struct GpuContext
     }
 };
 
+struct RenderPass
+{
+    WGPURenderPassEncoder encoder;
+    WGPUTextureView surface_view;
+
+    static RenderPass begin(
+        WGPUCommandEncoder const cmd_encoder,
+        WGPUSurface const surface,
+        WGPUTextureView const depth)
+    {
+        RenderPass result{};
+
+        result.surface_view = surface_make_view(surface);
+        assert(result.surface_view);
+
+        result.encoder = render_pass_begin(cmd_encoder, result.surface_view, depth);
+        assert(result.encoder);
+
+        return result;
+    }
+
+    static void end(RenderPass& pass)
+    {
+        wgpuRenderPassEncoderEnd(pass.encoder);
+        wgpuTextureViewRelease(pass.surface_view);
+        pass = {};
+    }
+};
+
 struct DepthTarget
 {
     static constexpr WGPUTextureFormat format = WGPUTextureFormat_Depth32Float;
@@ -404,35 +433,6 @@ struct RenderMaterial
     }
 };
 
-struct RenderPass
-{
-    WGPURenderPassEncoder encoder;
-    WGPUTextureView surface_view;
-
-    static RenderPass begin(
-        WGPUSurface const surface,
-        WGPUCommandEncoder const encoder,
-        WGPUTextureView const depth_view)
-    {
-        RenderPass result{};
-
-        result.surface_view = surface_make_view(surface);
-        assert(result.surface_view);
-
-        result.encoder = render_pass_begin(encoder, result.surface_view, depth_view);
-        assert(result.encoder);
-
-        return result;
-    }
-
-    static void end(RenderPass& pass)
-    {
-        wgpuRenderPassEncoderEnd(pass.encoder);
-        wgpuTextureViewRelease(pass.surface_view);
-        pass = {};
-    }
-};
-
 struct AppState
 {
     GLFWwindow* window;
@@ -584,7 +584,7 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            RenderPass pass = RenderPass::begin(state.gpu.surface, cmd_encoder, state.depth.view);
+            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface, state.depth.view);
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
             auto& mat = state.material;

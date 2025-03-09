@@ -98,10 +98,10 @@ struct Kernel
         kernel = {};
     }
 
-    void dispatch(WGPUCommandEncoder const encoder)
+    void dispatch(WGPUCommandEncoder const cmd_encoder)
     {
         wgpuCommandEncoderCopyBufferToBuffer(
-            encoder,
+            cmd_encoder,
             src_buf,
             0,
             dst_buf,
@@ -144,16 +144,16 @@ int main(int /*argc*/, char** /*argv*/)
     // Dispatch command(s)
     {
         // Create command encoder
-        WGPUCommandEncoder const encoder = wgpuDeviceCreateCommandEncoder(
+        WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
             state.gpu.device,
             nullptr);
-        assert(encoder);
-        auto const drop_encoder = defer([=]() { wgpuCommandEncoderRelease(encoder); });
+        assert(cmd_encoder);
+        auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
-        state.kernel.dispatch(encoder);
+        state.kernel.dispatch(cmd_encoder);
 
         // Create encoded commands
-        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(encoder, nullptr);
+        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
         assert(cmds);
         auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 

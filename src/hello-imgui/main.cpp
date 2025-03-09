@@ -120,8 +120,8 @@ struct RenderPass
     WGPUTextureView surface_view;
 
     static RenderPass begin(
+        WGPUCommandEncoder const cmd_encoder,
         WGPUSurface const surface,
-        WGPUCommandEncoder const encoder,
         WGPUColor const& clear_color)
     {
         RenderPass result{};
@@ -129,7 +129,7 @@ struct RenderPass
         result.surface_view = surface_make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(encoder, result.surface_view, &clear_color);
+        result.encoder = render_pass_begin(cmd_encoder, result.surface_view, &clear_color);
         assert(result.encoder);
 
         return result;
@@ -319,8 +319,8 @@ int main(int /*argc*/, char** /*argv*/)
             };
 
             RenderPass pass = RenderPass::begin(
-                state.gpu.surface,
                 cmd_encoder,
+                state.gpu.surface,
                 to_wgpu_color(state.clear_color));
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
