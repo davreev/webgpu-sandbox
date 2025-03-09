@@ -25,15 +25,9 @@ set(FETCHCONTENT_QUIET FALSE)
 # Targets
 #
 
-set(shared_src_dir "${CMAKE_CURRENT_LIST_DIR}/src/shared")
+add_subdirectory(libs)
 
-# Base library
-add_subdirectory("src/wgpu-app")
-
-# Examples
-add_subdirectory("src/buffer-copy")
-add_subdirectory("src/clear-screen")
-add_subdirectory("src/hello-imgui")
-add_subdirectory("src/hello-triangle")
-add_subdirectory("src/indexed-mesh")
-add_subdirectory("src/textured-mesh")
+option(WEBGPU_SANDBOX_APPS "Generate app targets" ON)
+if(WEBGPU_SANDBOX_APPS)
+    add_subdirectory(apps)
+endif()
