@@ -14,7 +14,7 @@ WGPURenderPassEncoder render_pass_begin(WGPUCommandEncoder encoder, WGPUTextureV
 
 WGPURenderPipeline make_render_pipeline(
     WGPUDevice device,
-    char const* shader_src,
+    WGPUStringView shader_src,
     WGPUTextureFormat color_format);
 
 #ifdef __cplusplus

@@ -125,7 +125,7 @@ WGPUPipelineLayout render_material_make_pipeline_layout(
 WGPURenderPipeline render_material_make_pipeline(
     WGPUDevice const device,
     WGPUPipelineLayout const layout,
-    char const* const shader_src,
+    WGPUStringView const shader_src,
     WGPUTextureFormat const surface_format,
     WGPUTextureFormat const depth_format)
 {
@@ -146,9 +146,9 @@ WGPURenderPipeline render_material_make_pipeline(
     WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(
         device, 
         &(WGPUShaderModuleDescriptor){
-            .nextInChain = (WGPUChainedStruct const*)&(WGPUShaderModuleWGSLDescriptor){
+            .nextInChain = (WGPUChainedStruct const*)&(WGPUShaderSourceWGSL){
                 .chain = {
-                    .sType = WGPUSType_ShaderModuleWGSLDescriptor,
+                    .sType = WGPUSType_ShaderSourceWGSL,
                 },
                 .code = shader_src,
             },
@@ -160,9 +160,10 @@ WGPURenderPipeline render_material_make_pipeline(
             .layout = layout,
             .vertex = {
                 .module = shader,
-                .entryPoint = "vs_main",
+                .entryPoint = {"vs_main", WGPU_STRLEN},
                 .bufferCount = 1,
                 .buffers = &(WGPUVertexBufferLayout){
+                    .stepMode = WGPUVertexStepMode_Vertex,
                     .arrayStride = sizeof(float[5]),
                     .attributeCount = sizeof(attrs) / sizeof(*attrs),
                     .attributes = attrs,
@@ -198,7 +199,7 @@ WGPURenderPipeline render_material_make_pipeline(
             },
             .fragment = &(WGPUFragmentState){
                 .module = shader,
-                .entryPoint = "fs_main",
+                .entryPoint = {"fs_main", WGPU_STRLEN},
                 .targetCount = 1,
                 .targets = &(WGPUColorTargetState){
                     .format = surface_format,
@@ -241,12 +242,12 @@ WGPUTexture render_material_make_color_texture(
     WGPUQueue const queue = wgpuDeviceGetQueue(device);
     wgpuQueueWriteTexture(
         queue,
-        &(WGPUImageCopyTexture){
+        &(WGPUTexelCopyTextureInfo){
             .texture = texture,
         },
         data,
         data_size,
-        &(WGPUTextureDataLayout){
+        &(WGPUTexelCopyBufferLayout){
             .bytesPerRow = row_size,
             .rowsPerImage = height,
         },
@@ -285,7 +286,7 @@ WGPUBuffer render_material_make_uniform_buffer(WGPUDevice const device, size_t c
 WGPUBuffer render_mesh_make_buffer(
     WGPUDevice const device,
     size_t const size,
-    WGPUBufferUsageFlags const usage)
+    WGPUBufferUsage const usage)
 {
     return wgpuDeviceCreateBuffer(
         device,
@@ -300,7 +301,7 @@ WGPUTextureView surface_make_view(WGPUSurface const surface)
 {
     WGPUSurfaceTexture srf_tex;
     wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
-    assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_Success);
+    assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal);
 
     return wgpuTextureCreateView(
         srf_tex.texture,
@@ -325,12 +326,7 @@ WGPURenderPassEncoder render_pass_begin(
                     .loadOp = WGPULoadOp_Clear,
                     .storeOp = WGPUStoreOp_Store,
                     .clearValue = {.r = 0.15, .g = 0.15, .b = 0.15, .a = 1.0},
-#ifdef __EMSCRIPTEN__
-                    // NOTE(dr): This isn't defined in wgpu-native as of v0.19.4.1 but is required
-                    // for web builds. See related issue:
-                    // https://github.com/eliemichel/WebGPU-distribution/issues/14
-                    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
-#endif
+                    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
                 },
             .depthStencilAttachment = &(WGPURenderPassDepthStencilAttachment){
                 .view = depth_view,

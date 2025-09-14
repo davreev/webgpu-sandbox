@@ -41,21 +41,24 @@ struct GpuContext
         result.adapter = request_adapter(result.instance);
         assert(result.adapter);
 
-        // Create WebGPU device
-        result.device = request_device(result.adapter);
-        assert(result.device);
-
-        // Set error callback on device
-        wgpuDeviceSetUncapturedErrorCallback(
-            result.device,
-            [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
+        // Provide uncaptured error callback to device creation
+        WGPUDeviceDescriptor device_desc = {};
+        device_desc.uncapturedErrorCallbackInfo.callback = //
+            [](WGPUDevice const* /*device*/,
+               WGPUErrorType type,
+               WGPUStringView msg,
+               void* /*userdata1*/,
+               void* /*userdata2*/) {
                 fmt::print(
                     "WebGPU device error: {} ({})\nMessage: {}\n",
                     to_string(type),
-                    static_cast<int>(type),
-                    msg);
-            },
-            nullptr);
+                    int(type),
+                    msg.data);
+            };
+
+        // Create WebGPU device
+        result.device = request_device(result.adapter, &device_desc);
+        assert(result.device);
 
         return result;
     }
@@ -164,36 +167,37 @@ int main(int /*argc*/, char** /*argv*/)
 
     // Read dst buffer back to host asynchronously
     {
-        constexpr auto map_cb = [](WGPUBufferMapAsyncStatus status, void* userdata) {
-            assert(status == WGPUBufferMapAsyncStatus_Success);
-
-            WGPUBuffer buf = static_cast<WGPUBuffer>(userdata);
-            auto const unmap = defer([=]() { wgpuBufferUnmap(buf); });
-
-            // Print out the mapped buffer's data
-            {
-                usize const size = wgpuBufferGetSize(buf);
-                auto data = static_cast<u8 const*>(wgpuBufferGetConstMappedRange(buf, 0, size));
-
-                fmt::print("dst buf: [{}", data[0]);
-                for (usize i = 1; i < size; ++i)
-                    fmt::print(", {}", data[i]);
-                fmt::print("]\n");
-            }
-
-#ifdef __EMSCRIPTEN__
-            wgpu::raise_event("resultReady");
-#endif
-        };
-
         auto const dst_buf = state.kernel.dst_buf;
-        wgpuBufferMapAsync(
-            dst_buf,
-            WGPUMapMode_Read,
-            0,
-            wgpuBufferGetSize(dst_buf),
-            map_cb,
-            dst_buf);
+
+        WGPUBufferMapCallbackInfo cb_info{};
+        cb_info.userdata1 = dst_buf;
+        cb_info.callback = //
+            [](WGPUMapAsyncStatus status,
+               WGPUStringView /*msg*/,
+               void* userdata1,
+               void* /*userdata2*/) {
+                assert(status == WGPUMapAsyncStatus_Success);
+
+                WGPUBuffer dst_buf = static_cast<WGPUBuffer>(userdata1);
+                auto const unmap = defer([=]() { wgpuBufferUnmap(dst_buf); });
+
+                // Print out the mapped buffer's data
+                {
+                    usize const size = wgpuBufferGetSize(dst_buf);
+                    auto data = static_cast<u8 const*>(
+                        wgpuBufferGetConstMappedRange(dst_buf, 0, size));
+
+                    fmt::print("dst buf: [{}", data[0]);
+                    for (usize i = 1; i < size; ++i)
+                        fmt::print(", {}", data[i]);
+                    fmt::print("]\n");
+                }
+#ifdef __EMSCRIPTEN__
+                wgpu::raise_event("resultReady");
+#endif
+            };
+
+        wgpuBufferMapAsync(dst_buf, WGPUMapMode_Read, 0, wgpuBufferGetSize(dst_buf), cb_info);
 
         // Wait until async work is done
 #ifdef __EMSCRIPTEN__

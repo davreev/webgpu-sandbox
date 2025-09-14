@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
 
-WGPUBuffer make_buffer(WGPUDevice device, size_t size, WGPUBufferUsageFlags usage);
+WGPUBuffer make_buffer(WGPUDevice device, size_t size, WGPUBufferUsage usage);
 
 #ifdef __cplusplus
 } // extern "C"

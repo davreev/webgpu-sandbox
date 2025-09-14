@@ -57,21 +57,24 @@ struct GpuContext
         result.adapter = request_adapter(result.instance, &options);
         assert(result.adapter);
 
-        // Create WebGPU device
-        result.device = request_device(result.adapter);
-        assert(result.device);
-
-        // Set error callback on device
-        wgpuDeviceSetUncapturedErrorCallback(
-            result.device,
-            [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
+        // Provide uncaptured error callback to device creation
+        WGPUDeviceDescriptor device_desc = {};
+        device_desc.uncapturedErrorCallbackInfo.callback = //
+            [](WGPUDevice const* /*device*/,
+               WGPUErrorType type,
+               WGPUStringView msg,
+               void* /*userdata1*/,
+               void* /*userdata2*/) {
                 fmt::print(
                     "WebGPU device error: {} ({})\nMessage: {}\n",
                     to_string(type),
-                    static_cast<int>(type),
-                    msg);
-            },
-            nullptr);
+                    int(type),
+                    msg.data);
+            };
+
+        // Create WebGPU device
+        result.device = request_device(result.adapter, &device_desc);
+        assert(result.device);
 
         result.surface_format = get_preferred_texture_format(result.surface, result.adapter);
         result.config_surface(window);
@@ -196,7 +199,10 @@ void init_app()
 #endif
 
     // Create render pipeline
-    state.pipeline = make_render_pipeline(state.gpu.device, shader_src, state.gpu.surface_format);
+    state.pipeline = make_render_pipeline(
+        state.gpu.device,
+        {shader_src, WGPU_STRLEN},
+        state.gpu.surface_format);
 }
 
 void deinit_app()

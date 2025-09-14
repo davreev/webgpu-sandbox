@@ -61,6 +61,6 @@ char const* to_string(WGPUCompositeAlphaMode value);
 
 char const* to_string(WGPUPresentMode value);
 
-char const* to_string(WGPUBufferMapAsyncStatus value);
+char const* to_string(WGPUMapAsyncStatus value);
 
 } // namespace wgpu

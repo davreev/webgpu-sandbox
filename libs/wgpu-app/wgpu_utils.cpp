@@ -37,55 +37,54 @@ namespace wgpu
 namespace
 {
 
-template <typename T>
-struct Range
+void report_features(WGPUSupportedFeatures const& features)
 {
-    T* ptr;
-    std::size_t size;
-    T* begin() const { return ptr; }
-    T* end() const { return ptr + size; }
-};
-
-void report_features(Range<WGPUFeatureName const> const& features)
-{
-    for (auto const f : features)
-        fmt::print("\t{} ({})\n", to_string(f), static_cast<int>(f));
+    for (std::size_t i = 0; i < features.featureCount; ++i)
+    {
+        WGPUFeatureName const name = features.features[i];
+        fmt::println("\t{} ({})", to_string(name), int(name));
+    }
 }
 
 void report_limits(WGPULimits const& limits)
 {
-    fmt::print("\tmaxTextureDimension1D: {}\n", limits.maxTextureDimension1D);
-    fmt::print("\tmaxTextureDimension2D: {}\n", limits.maxTextureDimension2D);
-    fmt::print("\tmaxTextureDimension3D: {}\n", limits.maxTextureDimension3D);
-    fmt::print("\tmaxTextureArrayLayers: {}\n", limits.maxTextureArrayLayers);
-    fmt::print("\tmaxBindGroups: {}\n", limits.maxBindGroups);
-    fmt::print(
-        "\tmaxDynamicUniformBuffersPerPipelineLayout: {}\n",
+    fmt::println("\tmaxTextureDimension1D: {}", limits.maxTextureDimension1D);
+    fmt::println("\tmaxTextureDimension2D: {}", limits.maxTextureDimension2D);
+    fmt::println("\tmaxTextureDimension3D: {}", limits.maxTextureDimension3D);
+    fmt::println("\tmaxTextureArrayLayers: {}", limits.maxTextureArrayLayers);
+    fmt::println("\tmaxBindGroups: {}", limits.maxBindGroups);
+    fmt::println("\tmaxBindGroupsPlusVertexBuffers: {}", limits.maxBindGroupsPlusVertexBuffers);
+    fmt::println("\tmaxBindingsPerBindGroup: {}", limits.maxBindingsPerBindGroup);
+    fmt::println(
+        "\tmaxDynamicUniformBuffersPerPipelineLayout: {}",
         limits.maxDynamicUniformBuffersPerPipelineLayout);
-    fmt::print(
-        "\tmaxDynamicStorageBuffersPerPipelineLayout: {}\n",
+    fmt::println(
+        "\tmaxDynamicStorageBuffersPerPipelineLayout: {}",
         limits.maxDynamicStorageBuffersPerPipelineLayout);
-    fmt::print("\tmaxSampledTexturesPerShaderStage: {}\n", limits.maxSampledTexturesPerShaderStage);
-    fmt::print("\tmaxSamplersPerShaderStage: {}\n", limits.maxSamplersPerShaderStage);
-    fmt::print("\tmaxStorageBuffersPerShaderStage: {}\n", limits.maxStorageBuffersPerShaderStage);
-    fmt::print("\tmaxStorageTexturesPerShaderStage: {}\n", limits.maxStorageTexturesPerShaderStage);
-    fmt::print("\tmaxUniformBuffersPerShaderStage: {}\n", limits.maxUniformBuffersPerShaderStage);
-    fmt::print("\tmaxUniformBufferBindingSize: {}\n", limits.maxUniformBufferBindingSize);
-    fmt::print("\tmaxStorageBufferBindingSize: {}\n", limits.maxStorageBufferBindingSize);
-    fmt::print("\tminUniformBufferOffsetAlignment: {}\n", limits.minUniformBufferOffsetAlignment);
-    fmt::print("\tminStorageBufferOffsetAlignment: {}\n", limits.minStorageBufferOffsetAlignment);
-    fmt::print("\tmaxVertexBuffers: {}\n", limits.maxVertexBuffers);
-    fmt::print("\tmaxVertexAttributes: {}\n", limits.maxVertexAttributes);
-    fmt::print("\tmaxVertexBufferArrayStride: {}\n", limits.maxVertexBufferArrayStride);
-    fmt::print("\tmaxInterStageShaderComponents: {}\n", limits.maxInterStageShaderComponents);
-    fmt::print("\tmaxComputeWorkgroupStorageSize: {}\n", limits.maxComputeWorkgroupStorageSize);
-    fmt::print(
-        "\tmaxComputeInvocationsPerWorkgroup: {}\n",
+    fmt::println("\tmaxSampledTexturesPerShaderStage: {}", limits.maxSampledTexturesPerShaderStage);
+    fmt::println("\tmaxSamplersPerShaderStage: {}", limits.maxSamplersPerShaderStage);
+    fmt::println("\tmaxStorageBuffersPerShaderStage: {}", limits.maxStorageBuffersPerShaderStage);
+    fmt::println("\tmaxStorageTexturesPerShaderStage: {}", limits.maxStorageTexturesPerShaderStage);
+    fmt::println("\tmaxUniformBuffersPerShaderStage: {}", limits.maxUniformBuffersPerShaderStage);
+    fmt::println("\tmaxUniformBufferBindingSize: {}", limits.maxUniformBufferBindingSize);
+    fmt::println("\tmaxStorageBufferBindingSize: {}", limits.maxStorageBufferBindingSize);
+    fmt::println("\tminUniformBufferOffsetAlignment: {}", limits.minUniformBufferOffsetAlignment);
+    fmt::println("\tminStorageBufferOffsetAlignment: {}", limits.minStorageBufferOffsetAlignment);
+    fmt::println("\tmaxVertexBuffers: {}", limits.maxVertexBuffers);
+    fmt::println("\tmaxBufferSize: {}", limits.maxBufferSize);
+    fmt::println("\tmaxVertexAttributes: {}", limits.maxVertexAttributes);
+    fmt::println("\tmaxVertexBufferArrayStride: {}", limits.maxVertexBufferArrayStride);
+    fmt::println("\tmaxInterStageShaderComponents: {}", limits.maxInterStageShaderVariables);
+    fmt::println("\tmaxColorAttachments: {}", limits.maxColorAttachments);
+    fmt::println("\tmaxColorAttachmentBytesPerSample: {}", limits.maxColorAttachmentBytesPerSample);
+    fmt::println("\tmaxComputeWorkgroupStorageSize: {}", limits.maxComputeWorkgroupStorageSize);
+    fmt::println(
+        "\tmaxComputeInvocationsPerWorkgroup: {}",
         limits.maxComputeInvocationsPerWorkgroup);
-    fmt::print("\tmaxComputeWorkgroupSizeX: {}\n", limits.maxComputeWorkgroupSizeX);
-    fmt::print("\tmaxComputeWorkgroupSizeY: {}\n", limits.maxComputeWorkgroupSizeY);
-    fmt::print("\tmaxComputeWorkgroupSizeZ: {}\n", limits.maxComputeWorkgroupSizeZ);
-    fmt::print("\tmaxComputeWorkgroupsPerDimension: {}\n", limits.maxComputeWorkgroupsPerDimension);
+    fmt::println("\tmaxComputeWorkgroupSizeX: {}", limits.maxComputeWorkgroupSizeX);
+    fmt::println("\tmaxComputeWorkgroupSizeY: {}", limits.maxComputeWorkgroupSizeY);
+    fmt::println("\tmaxComputeWorkgroupSizeZ: {}", limits.maxComputeWorkgroupSizeZ);
+    fmt::println("\tmaxComputeWorkgroupsPerDimension: {}", limits.maxComputeWorkgroupsPerDimension);
 }
 
 } // namespace
@@ -143,20 +142,23 @@ WGPUAdapter request_adapter(
         WGPUAdapter adapter;
     } result{};
 
-    auto const callback = //
+    WGPURequestAdapterCallbackInfo cb_info{};
+    cb_info.userdata1 = &result;
+    cb_info.callback = //
         [](WGPURequestAdapterStatus status,
            WGPUAdapter adapter,
-           char const* message,
-           void* userdata) {
-            auto resp = static_cast<Result*>(userdata);
+           WGPUStringView message,
+           void* userdata1,
+           void* /*userdata2*/) {
+            auto resp = static_cast<Result*>(userdata1);
             if (status == WGPURequestAdapterStatus_Success)
                 resp->adapter = adapter;
             else
-                fmt::print("Could not get WebGPU adapter. Message: {}\n", message);
+                fmt::println("Could not get WebGPU adapter. Message: {}", message.data);
             raise_event("wgpuAdapterReady");
         };
 
-    wgpuInstanceRequestAdapter(instance, options, callback, &result);
+    wgpuInstanceRequestAdapter(instance, options, cb_info);
     wait_for_event("wgpuAdapterReady");
 
     assert(result.adapter);
@@ -170,17 +172,23 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
         WGPUDevice device;
     } result{};
 
-    auto const callback =
-        [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-            auto result = static_cast<Result*>(userdata);
+    WGPURequestDeviceCallbackInfo cb_info{};
+    cb_info.userdata1 = &result;
+    cb_info.callback = //
+        [](WGPURequestDeviceStatus status,
+           WGPUDevice device,
+           WGPUStringView message,
+           void* userdata1,
+           void* /*userdata2*/) {
+            auto result = static_cast<Result*>(userdata1);
             if (status == WGPURequestDeviceStatus_Success)
                 result->device = device;
             else
-                fmt::print("Could not get WebGPU device. Message: {}\n", message);
+                fmt::println("Could not get WebGPU device. Message: {}", message.data);
             raise_event("wgpuDeviceReady");
         };
 
-    wgpuAdapterRequestDevice(adapter, desc, callback, &result);
+    wgpuAdapterRequestDevice(adapter, desc, cb_info);
     wait_for_event("wgpuDeviceReady");
 
     assert(result.device);
@@ -200,63 +208,56 @@ WGPUTextureFormat get_preferred_texture_format(
 
 void report_adapter_features(WGPUAdapter const adapter)
 {
-    std::size_t const num_features = wgpuAdapterEnumerateFeatures(adapter, nullptr);
-    std::vector<WGPUFeatureName> features(num_features);
-    wgpuAdapterEnumerateFeatures(adapter, features.data());
+    WGPUSupportedFeatures features;
+    wgpuAdapterGetFeatures(adapter, &features);
 
-    fmt::print("Adapter features:\n");
-    report_features({features.data(), num_features});
+    fmt::println("Adapter features:");
+    report_features(features);
 }
 
 void report_adapter_limits(WGPUAdapter const adapter)
 {
-    WGPUSupportedLimits limits{};
-    [[maybe_unused]] bool const ok = wgpuAdapterGetLimits(adapter, &limits);
-    assert(ok);
+    WGPULimits limits{};
+    [[maybe_unused]]
+    auto const status = wgpuAdapterGetLimits(adapter, &limits);
+    assert(status == WGPUStatus_Success);
 
-    fmt::print("Adapter limits:\n");
-    report_limits(limits.limits);
+    fmt::println("Adapter limits:");
+    report_limits(limits);
 }
 
 void report_adapter_properties(WGPUAdapter const adapter)
 {
-    WGPUAdapterProperties props{};
-    wgpuAdapterGetProperties(adapter, &props);
+    WGPUAdapterInfo info{};
+    wgpuAdapterGetInfo(adapter, &info);
 
-    fmt::print("Adapter properties:\n");
-    fmt::print("\tname: {}\n", props.name);
-    fmt::print("\tvendorName: {}\n", props.vendorName);
-    fmt::print("\tdeviceID: {}\n", props.deviceID);
-    fmt::print("\tvendorID: {}\n", props.vendorID);
-    if (props.driverDescription) fmt::print("\tdriverDescription: {}\n", props.driverDescription);
-    fmt::print(
-        "\tadapterType: {} ({})\n",
-        to_string(props.adapterType),
-        static_cast<int>(props.adapterType));
-    fmt::print(
-        "\tbackendType: {} ({})\n",
-        to_string(props.backendType),
-        static_cast<int>(props.backendType));
+    fmt::println("Adapter properties:");
+    fmt::println("\tvendor: {} (id: {})", info.vendor.data, info.vendorID);
+    fmt::println("\tdevice: {} (id: {})", info.device.data, info.deviceID);
+    if(info.architecture.data)
+        fmt::println("\tarchitecture: {}", info.architecture.data);
+    fmt::println("\tdescription: {}", info.description.data);
+    fmt::println("\tadapterType: {} ({})", to_string(info.adapterType), int(info.adapterType));
+    fmt::println("\tbackendType: {} ({})", to_string(info.backendType), int(info.backendType));
 }
 
 void report_device_features(WGPUDevice const device)
 {
-    std::size_t const num_features = wgpuDeviceEnumerateFeatures(device, nullptr);
-    std::vector<WGPUFeatureName> features(num_features);
-    wgpuDeviceEnumerateFeatures(device, features.data());
-
-    fmt::print("Device features:\n");
-    report_features({features.data(), num_features});
+    WGPUSupportedFeatures features;
+    wgpuDeviceGetFeatures(device, &features);
+    fmt::println("Device features:");
+    report_features(features);
 }
 
 void report_device_limits(WGPUDevice const device)
 {
-    WGPUSupportedLimits limits{};
-    [[maybe_unused]] bool const ok = wgpuDeviceGetLimits(device, &limits);
-    assert(ok);
+    WGPULimits limits{};
+    [[maybe_unused]]
+    auto const status = wgpuDeviceGetLimits(device, &limits);
+    assert(status == WGPUStatus::WGPUStatus_Success);
 
-    fmt::print("Adapter limits:\n");
-    report_limits(limits.limits);
+    fmt::println("Device limits:");
+    report_limits(limits);
 }
 
 void report_surface_capabilities(WGPUSurface const surface, WGPUAdapter const adapter)
@@ -264,19 +265,18 @@ void report_surface_capabilities(WGPUSurface const surface, WGPUAdapter const ad
     WGPUSurfaceCapabilities cap{};
     wgpuSurfaceGetCapabilities(surface, adapter, &cap);
 
-    fmt::print("Surface capabilities:\n");
-
-    fmt::print("\tformats:\n");
+    fmt::println("Surface capabilities:");
+    fmt::println("\tformats:");
     for (std::size_t i = 0; i < cap.formatCount; ++i)
-        fmt::print("\t\t{}\n", to_string(cap.formats[i]));
+        fmt::println("\t\t{}", to_string(cap.formats[i]));
 
-    fmt::print("\talphaModes:\n");
+    fmt::println("\talphaModes:");
     for (std::size_t i = 0; i < cap.alphaModeCount; ++i)
-        fmt::print("\t\t{}\n", to_string(cap.alphaModes[i]));
+        fmt::println("\t\t{}", to_string(cap.alphaModes[i]));
 
-    fmt::print("\tpresentModes:\n");
+    fmt::println("\tpresentModes:");
     for (std::size_t i = 0; i < cap.presentModeCount; ++i)
-        fmt::print("\t\t{}\n", to_string(cap.presentModes[i]));
+        fmt::println("\t\t{}", to_string(cap.presentModes[i]));
 }
 
 char const* to_string(WGPUFeatureName const value)
@@ -287,13 +287,18 @@ char const* to_string(WGPUFeatureName const value)
         "Depth32FloatStencil8",
         "TimestampQuery",
         "TextureCompressionBC",
+        "TextureCompressionBCSliced3D",
         "TextureCompressionETC2",
         "TextureCompressionASTC",
+        "TextureCompressionASTCSliced3D",
         "IndirectFirstInstance",
         "ShaderF16",
         "RG11B10UfloatRenderable",
         "BGRA8UnormStorage",
         "Float32Filterable",
+        "Float32Blendable",
+        "ClipDistances",
+        "DualSourceBlending",
     };
     if (value >= std::size(names))
         return "Unknown native feature";
@@ -348,10 +353,9 @@ char const* to_string(WGPUQueueWorkDoneStatus const value)
 {
     static constexpr char const* names[]{
         "Success",
+        "InstanceDropped",
         "Error",
         "Unknown",
-        "DeviceLost",
-        "DeviceLost",
     };
     assert(value < std::size(names));
     return names[value];
@@ -360,12 +364,14 @@ char const* to_string(WGPUQueueWorkDoneStatus const value)
 char const* to_string(WGPUSurfaceGetCurrentTextureStatus const value)
 {
     static constexpr char const* names[]{
-        "Success",
+        "SuccessOptimal",
+        "SuccessSuboptimal",
         "Timeout",
         "Outdated",
         "Lost",
         "OutOfMemory",
         "DeviceLost",
+        "Error",
     };
     assert(value < std::size(names));
     return names[value];
@@ -373,6 +379,7 @@ char const* to_string(WGPUSurfaceGetCurrentTextureStatus const value)
 
 char const* to_string(WGPUTextureFormat const value)
 {
+    // clang-format off
     static constexpr char const* names[]{
         "Undefined",
         "R8Unorm",
@@ -399,6 +406,7 @@ char const* to_string(WGPUTextureFormat const value)
         "RGBA8Sint",
         "BGRA8Unorm",
         "BGRA8UnormSrgb",
+        "RGB10A2Uint",
         "RGB10A2Unorm",
         "RG11B10Ufloat",
         "RGB9E5Ufloat",
@@ -470,6 +478,7 @@ char const* to_string(WGPUTextureFormat const value)
         "ASTC12x12Unorm",
         "ASTC12x12UnormSrgb",
     };
+    // clang-format on
     assert(value < std::size(names));
     return names[value];
 }
@@ -490,6 +499,7 @@ char const* to_string(WGPUCompositeAlphaMode const value)
 char const* to_string(WGPUPresentMode const value)
 {
     static constexpr char const* names[]{
+        "Undefined",
         "Fifo",
         "FifoRelaxed",
         "Immediate",
@@ -499,18 +509,14 @@ char const* to_string(WGPUPresentMode const value)
     return names[value];
 }
 
-char const* to_string(WGPUBufferMapAsyncStatus value)
+char const* to_string(WGPUMapAsyncStatus value)
 {
     static constexpr char const* names[]{
         "Success",
-        "ValidationError",
+        "InstanceDropped",
+        "Error",
+        "Aborted",
         "Unknown",
-        "DeviceLost",
-        "DestroyedBeforeCallback",
-        "UnmappedBeforeCallback",
-        "MappingAlreadyPending",
-        "OffsetOutOfRange",
-        "SizeOutOfRange",
     };
     assert(value < std::size(names));
     return names[value];

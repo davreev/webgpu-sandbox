@@ -37,15 +37,15 @@
 #include <GLFW/glfw3native.h>
 
 #if WGPU_TARGET == WGPU_TARGET_LINUX_X11
-typedef WGPUSurfaceDescriptorFromXlibWindow TargetSurfaceDesc;
+typedef WGPUSurfaceSourceXlibWindow SurfaceSource;
 
-static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
+static SurfaceSource surface_source(GLFWwindow* const window)
 {
     // clang-format off
-    return (TargetSurfaceDesc){
+    return (SurfaceSource){
         .chain = {
             .next = NULL,
-            .sType = WGPUSType_SurfaceDescriptorFromXlibWindow,
+            .sType = WGPUSType_SurfaceSourceXlibWindow,
         },
         .display = glfwGetX11Display(),
         .window = glfwGetX11Window(window),
@@ -54,15 +54,15 @@ static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
 }
 
 #elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
-typedef WGPUSurfaceDescriptorFromWaylandSurface TargetSurfaceDesc;
+typedef WGPUSurfaceSourceWaylandSurface SurfaceSource;
 
-static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
+static SurfaceSource surface_source(GLFWwindow* const window)
 {
     // clang-format off
-    return (TargetSurfaceDesc){
+    return (SurfaceSource){
         .chain = {
             .next = NULL,
-            .sType = WGPUSType_SurfaceDescriptorFromWaylandSurface,
+            .sType = WGPUSType_SurfaceSourceWaylandSurface,
         },
         .display = glfwGetWaylandDisplay(),
         .surface = glfwGetWaylandWindow(window),
@@ -71,9 +71,9 @@ static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
 }
 
 #elif WGPU_TARGET == WGPU_TARGET_MACOS
-typedef WGPUSurfaceDescriptorFromMetalLayer TargetSurfaceDesc;
+typedef WGPUSurfaceSourceMetalLayer SurfaceSource;
 
-static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
+static SurfaceSource surface_source(GLFWwindow* const window)
 {
     NSWindow* ns_window = glfwGetCocoaWindow(window);
     [ns_window.contentView setWantsLayer:YES];
@@ -82,10 +82,10 @@ static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
     [ns_window.contentView setLayer:metal_layer];
 
     // clang-format off
-    return (TargetSurfaceDesc){
+    return (SurfaceSource){
         .chain = {
             .next = NULL,
-            .sType = WGPUSType_SurfaceDescriptorFromMetalLayer,
+            .sType = WGPUSType_SurfaceSourceMetalLayer,
         },
         .layer = metal_layer,
     };
@@ -93,15 +93,15 @@ static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
 }
 
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
-typedef WGPUSurfaceDescriptorFromWindowsHWND TargetSurfaceDesc;
+typedef WGPUSurfaceSourceWindowsHWND SurfaceSource;
 
-static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
+static SurfaceSource surface_source(GLFWwindow* const window)
 {
     // clang-format off
-    return (TargetSurfaceDesc){
+    return (SurfaceSource){
         .chain = {
             .next = NULL,
-            .sType = WGPUSType_SurfaceDescriptorFromWindowsHWND,
+            .sType = WGPUSType_SurfaceSourceWindowsHWND,
         },
         .hinstance = GetModuleHandle(NULL),
         .hwnd = glfwGetWin32Window(window),
@@ -116,11 +116,11 @@ static TargetSurfaceDesc target_surface_desc(GLFWwindow* const window)
 
 WGPUSurface wgpu_make_surface_from_glfw(WGPUInstance const instance, GLFWwindow* const window)
 {
-    TargetSurfaceDesc const desc = target_surface_desc(window);
+    SurfaceSource const desc = surface_source(window);
     return wgpuInstanceCreateSurface(
         instance,
         &(WGPUSurfaceDescriptor){
-            .label = NULL,
+            .label = {0},
             .nextInChain = (WGPUChainedStruct const*)&desc,
         });
 }

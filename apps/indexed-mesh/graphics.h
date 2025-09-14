@@ -14,10 +14,10 @@ WGPURenderPassEncoder render_pass_begin(WGPUCommandEncoder encoder, WGPUTextureV
 
 WGPURenderPipeline make_render_pipeline(
     WGPUDevice device,
-    char const* shader_src,
+    WGPUStringView shader_src,
     WGPUTextureFormat color_format);
 
-WGPUBuffer render_mesh_make_buffer(WGPUDevice device, size_t size, WGPUBufferUsageFlags usage);
+WGPUBuffer render_mesh_make_buffer(WGPUDevice device, size_t size, WGPUBufferUsage usage);
 
 #ifdef __cplusplus
 } // extern "C"

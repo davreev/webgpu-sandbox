@@ -6,7 +6,7 @@ include(FetchContent)
 
 FetchContent_Declare(
     imgui
-    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.90.9.zip
+    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.2.zip
 )
 
 FetchContent_GetProperties(imgui)
@@ -57,5 +57,10 @@ if(NOT EMSCRIPTEN)
         PRIVATE
             glfw::glfw
             wgpu-native
+    )
+    target_compile_definitions(
+        imgui
+        PUBLIC
+            IMGUI_IMPL_WEBGPU_BACKEND_WGPU
     )
 endif()

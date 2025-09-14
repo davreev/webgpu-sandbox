@@ -32,7 +32,7 @@ WGPUPipelineLayout render_material_make_pipeline_layout(
 WGPURenderPipeline render_material_make_pipeline(
     WGPUDevice device,
     WGPUPipelineLayout layout,
-    char const* shader_src,
+    WGPUStringView shader_src,
     WGPUTextureFormat surface_format,
     WGPUTextureFormat depth_format);
 
@@ -47,7 +47,7 @@ WGPUTexture render_material_make_color_texture(
 
 WGPUBuffer render_material_make_uniform_buffer(WGPUDevice device, size_t size);
 
-WGPUBuffer render_mesh_make_buffer(WGPUDevice device, size_t size, WGPUBufferUsageFlags usage);
+WGPUBuffer render_mesh_make_buffer(WGPUDevice device, size_t size, WGPUBufferUsage usage);
 
 WGPUTextureView surface_make_view(WGPUSurface surface);
 

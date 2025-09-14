@@ -56,21 +56,24 @@ struct GpuContext
         result.adapter = request_adapter(result.instance, &options);
         assert(result.adapter);
 
-        // Create WebGPU device
-        result.device = request_device(result.adapter);
-        assert(result.device);
-
-        // Set error callback on device
-        wgpuDeviceSetUncapturedErrorCallback(
-            result.device,
-            [](WGPUErrorType type, char const* msg, void* /*userdata*/) {
+        // Provide uncaptured error callback to device creation
+        WGPUDeviceDescriptor device_desc = {};
+        device_desc.uncapturedErrorCallbackInfo.callback = //
+            [](WGPUDevice const* /*device*/,
+               WGPUErrorType type,
+               WGPUStringView msg,
+               void* /*userdata1*/,
+               void* /*userdata2*/) {
                 fmt::print(
                     "WebGPU device error: {} ({})\nMessage: {}\n",
                     to_string(type),
-                    static_cast<int>(type),
-                    msg);
-            },
-            nullptr);
+                    int(type),
+                    msg.data);
+            };
+
+        // Create WebGPU device
+        result.device = request_device(result.adapter, &device_desc);
+        assert(result.device);
 
         result.surface_format = get_preferred_texture_format(result.surface, result.adapter);
         result.config_surface(window);
@@ -252,17 +255,19 @@ int main(int /*argc*/, char** /*argv*/)
         wgpuQueueSubmit(queue, 1, &cmds);
 
         // Register callback that fires when queued work is done
-        constexpr auto work_done_cb = [](WGPUQueueWorkDoneStatus const status, void* /*userdata*/) {
-            if (state.frame_count % 100 == 0)
-            {
-                fmt::print(
-                    "Finished frame {} with status: {}\n",
-                    state.frame_count,
-                    wgpu::to_string(status));
-            }
-            ++state.frame_count;
-        };
-        wgpuQueueOnSubmittedWorkDone(queue, work_done_cb, nullptr);
+        WGPUQueueWorkDoneCallbackInfo cb_info = {};
+        cb_info.callback =
+            [](WGPUQueueWorkDoneStatus const status, void* /*userdata1*/, void* /*userdata2*/) {
+                if (state.frame_count % 100 == 0)
+                {
+                    fmt::print(
+                        "Finished frame {} with status: {}\n",
+                        state.frame_count,
+                        wgpu::to_string(status));
+                }
+                ++state.frame_count;
+            };
+        wgpuQueueOnSubmittedWorkDone(queue, cb_info);
     };
 
     // Main loop

@@ -3,7 +3,7 @@ if(TARGET wgpu-native)
 endif()
 
 function(import_wgpu_native)
-    set(release_ver "v0.19.4.1")
+    set(release_ver "v25.0.2.2")
 
     set(release_arch ${CMAKE_HOST_SYSTEM_PROCESSOR})
     if(${release_arch} STREQUAL "arm64")
@@ -65,7 +65,7 @@ function(import_wgpu_native)
     add_library(wgpu-native STATIC IMPORTED)
 
     set_target_properties(wgpu-native PROPERTIES
-        IMPORTED_LOCATION "${wgpu-native_SOURCE_DIR}/${lib_file}"
+        IMPORTED_LOCATION "${wgpu-native_SOURCE_DIR}/lib/${lib_file}"
         INTERFACE_INCLUDE_DIRECTORIES "${wgpu-native_SOURCE_DIR}/include"
     )
 

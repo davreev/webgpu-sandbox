@@ -1,6 +1,6 @@
 #include "utils.h"
 
-WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsageFlags const usage)
+WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsage const usage)
 {
     return wgpuDeviceCreateBuffer(
         device,
