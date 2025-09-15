@@ -23,16 +23,16 @@ cmake --build ./build [--config <config>] [--target <target-name>]
 ### Web Build
 
 Download the [Emscripten SDK](https://github.com/emscripten-core/emsdk) and dot source the
-appropriate setup script
+provided script to initialized the Emscripten toolchain
 
 ```sh
 # Bash
 EMSDK_DIR="absolute/path/of/emsdk/root"
-. ./emsc-setup.sh
+. ./emsc-init.sh
 
 # Powershell
 $EMSDK_DIR="absolute/path/of/emsdk/root"
-. ./emsc-setup.ps1
+. ./emsc-init.ps1
 ```
 
 Then build via `emcmake`
@@ -56,10 +56,12 @@ python -m http.server
 
 - https://www.w3.org/TR/webgpu
 - https://www.w3.org/TR/WGSL
+- https://github.com/eliemichel/WebGPU-distribution/tree/main
 - https://eliemichel.github.io/LearnWebGPU/index.html
-- https://surma.dev/things/webgpu/
-- https://developer.chrome.com/blog/webgpu-cross-platform/
-- https://github.com/samdauwe/webgpu-native-examples
+- https://developer.chrome.com/docs/web-platform/webgpu/build-app
+- https://github.com/beaufortfrancois/webgpu-cross-platform-app
 - https://github.com/kainino0x/webgpu-cross-platform-demo
+- https://github.com/samdauwe/webgpu-native-examples
 - https://github.com/ocornut/imgui/tree/master/examples/example_glfw_wgpu
+- https://surma.dev/things/webgpu/
 - https://sotrh.github.io/learn-wgpu

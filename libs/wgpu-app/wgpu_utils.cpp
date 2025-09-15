@@ -117,12 +117,12 @@ void get_canvas_client_size(int& width, int& height)
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)
 {
-    WGPUSurfaceDescriptorFromCanvasHTMLSelector next_desc{};
-    next_desc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
-    next_desc.selector = canvas_selector;
+    WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvas_desc{};
+    canvas_desc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
+    canvas_desc.selector = {canvas_selector, WGPU_STRLEN};
 
     WGPUSurfaceDescriptor desc{};
-    desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&next_desc);
+    desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&canvas_desc);
 
     return wgpuInstanceCreateSurface(instance, &desc);
 }
@@ -144,6 +144,7 @@ WGPUAdapter request_adapter(
 
     WGPURequestAdapterCallbackInfo cb_info{};
     cb_info.userdata1 = &result;
+    cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
     cb_info.callback = //
         [](WGPURequestAdapterStatus status,
            WGPUAdapter adapter,
@@ -174,6 +175,7 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
 
     WGPURequestDeviceCallbackInfo cb_info{};
     cb_info.userdata1 = &result;
+    cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
     cb_info.callback = //
         [](WGPURequestDeviceStatus status,
            WGPUDevice device,
@@ -193,17 +195,6 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
 
     assert(result.device);
     return result.device;
-}
-
-WGPUTextureFormat get_preferred_texture_format(
-    [[maybe_unused]] WGPUSurface const surface,
-    [[maybe_unused]] WGPUAdapter const adapter)
-{
-#ifdef __EMSCRIPTEN__
-    return wgpuSurfaceGetPreferredFormat(surface, adapter);
-#else
-    return WGPUTextureFormat_BGRA8Unorm;
-#endif
 }
 
 void report_adapter_features(WGPUAdapter const adapter)
@@ -234,7 +225,7 @@ void report_adapter_properties(WGPUAdapter const adapter)
     fmt::println("Adapter properties:");
     fmt::println("\tvendor: {} (id: {})", info.vendor.data, info.vendorID);
     fmt::println("\tdevice: {} (id: {})", info.device.data, info.deviceID);
-    if(info.architecture.data)
+    if (info.architecture.data)
         fmt::println("\tarchitecture: {}", info.architecture.data);
     fmt::println("\tdescription: {}", info.description.data);
     fmt::println("\tadapterType: {} ({})", to_string(info.adapterType), int(info.adapterType));
@@ -309,6 +300,7 @@ char const* to_string(WGPUFeatureName const value)
 char const* to_string(WGPUAdapterType const value)
 {
     static constexpr char const* names[]{
+        "Undefined",
         "DiscreteGPU",
         "IntegratedGPU",
         "CPU",
@@ -338,6 +330,7 @@ char const* to_string(WGPUBackendType const value)
 char const* to_string(WGPUErrorType const value)
 {
     static constexpr char const* names[]{
+        "Undefined",
         "None",
         "Validation",
         "OutOfMemory",
@@ -352,6 +345,7 @@ char const* to_string(WGPUErrorType const value)
 char const* to_string(WGPUQueueWorkDoneStatus const value)
 {
     static constexpr char const* names[]{
+        "Undefined",
         "Success",
         "InstanceDropped",
         "Error",
@@ -364,6 +358,7 @@ char const* to_string(WGPUQueueWorkDoneStatus const value)
 char const* to_string(WGPUSurfaceGetCurrentTextureStatus const value)
 {
     static constexpr char const* names[]{
+        "Undefined",
         "SuccessOptimal",
         "SuccessSuboptimal",
         "Timeout",
@@ -512,6 +507,7 @@ char const* to_string(WGPUPresentMode const value)
 char const* to_string(WGPUMapAsyncStatus value)
 {
     static constexpr char const* names[]{
+        "Undefined",
         "Success",
         "InstanceDropped",
         "Error",

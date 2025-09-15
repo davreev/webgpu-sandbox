@@ -75,7 +75,7 @@ struct GpuContext
         result.device = request_device(result.adapter, &device_desc);
         assert(result.device);
 
-        result.surface_format = get_preferred_texture_format(result.surface, result.adapter);
+        result.surface_format = WGPUTextureFormat_BGRA8Unorm;
         result.config_surface(window);
 
         return result;
@@ -100,10 +100,6 @@ struct GpuContext
             config.height = height;
             config.format = surface_format;
             config.usage = WGPUTextureUsage_RenderAttachment;
-#ifdef __EMSCRIPTEN__
-            // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
-            config.presentMode = WGPUPresentMode_Fifo;
-#endif
         }
         wgpuSurfaceConfigure(surface, &config);
     }
@@ -256,8 +252,17 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Register callback that fires when queued work is done
         WGPUQueueWorkDoneCallbackInfo cb_info = {};
+        cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
         cb_info.callback =
+#ifdef __EMSCRIPTEN__
+            // NOTE(dr): Callback from webgpu.h in Emdawnwebgpu has additional params
+            [](WGPUQueueWorkDoneStatus const status,
+               WGPUStringView /*msg*/,
+               void* /*userdata1*/,
+               void* /*userdata2*/) {
+#else
             [](WGPUQueueWorkDoneStatus const status, void* /*userdata1*/, void* /*userdata2*/) {
+#endif
                 if (state.frame_count % 100 == 0)
                 {
                     fmt::print(

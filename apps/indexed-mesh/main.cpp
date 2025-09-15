@@ -79,7 +79,7 @@ struct GpuContext
         result.device = request_device(result.adapter, &device_desc);
         assert(result.device);
 
-        result.surface_format = get_preferred_texture_format(result.surface, result.adapter);
+        result.surface_format = WGPUTextureFormat_BGRA8Unorm;
         result.config_surface(window);
 
         return result;
@@ -104,10 +104,6 @@ struct GpuContext
             config.height = height;
             config.format = surface_format;
             config.usage = WGPUTextureUsage_RenderAttachment;
-#ifdef __EMSCRIPTEN__
-            // NOTE(dr): Default value from Emscripten's webgpu.h is undefined
-            config.presentMode = WGPUPresentMode_Fifo;
-#endif
         }
         wgpuSurfaceConfigure(surface, &config);
     }

@@ -146,7 +146,7 @@ WGPURenderPipeline render_material_make_pipeline(
     WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(
         device, 
         &(WGPUShaderModuleDescriptor){
-            .nextInChain = (WGPUChainedStruct const*)&(WGPUShaderSourceWGSL){
+            .nextInChain = (WGPUChainedStruct*)&(WGPUShaderSourceWGSL){
                 .chain = {
                     .sType = WGPUSType_ShaderSourceWGSL,
                 },

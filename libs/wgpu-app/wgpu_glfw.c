@@ -121,6 +121,6 @@ WGPUSurface wgpu_make_surface_from_glfw(WGPUInstance const instance, GLFWwindow*
         instance,
         &(WGPUSurfaceDescriptor){
             .label = {0},
-            .nextInChain = (WGPUChainedStruct const*)&desc,
+            .nextInChain = (WGPUChainedStruct*)&desc,
         });
 }

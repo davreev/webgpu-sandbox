@@ -24,21 +24,26 @@ target_compile_options(
         -Wall -Wextra -Wpedantic -Werror
 )
 
-# Set Emscripten compiler options
 if(EMSCRIPTEN)
+    # Set Emscripten compiler options
     target_link_options(
         wgpu-app
         PUBLIC
-            "-sUSE_WEBGPU=1"
+            # "-sUSE_WEBGPU=1"
             "-sUSE_GLFW=3"
             "-sASYNCIFY"
             "$<$<CONFIG:Debug>:-sASSERTIONS=2>"
             "$<$<CONFIG:Debug>:-gsource-map>"
     )
-endif()
 
-# Link to native backend if not compiling with Emscripten
-if(NOT EMSCRIPTEN)
+    # NOTE(dr): Using Emdawnwebgpu for Emscripten builds as its webgpu.h is more up to date
+    include(deps/emdawnwebgpu)
+    target_link_libraries(
+        wgpu-app
+        PUBLIC
+            emdawnwebgpu
+    )
+else()
     add_library(
         wgpu-glfw STATIC
         "wgpu_glfw.c"
