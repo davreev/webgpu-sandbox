@@ -6,7 +6,7 @@ include(FetchContent)
 
 FetchContent_Declare(
     imgui
-    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.2.zip
+    URL https://github.com/davreev/imgui/archive/refs/tags/v1.92.2b-emdawnwebgpu.zip
 )
 
 FetchContent_GetProperties(imgui)
@@ -56,16 +56,12 @@ if(EMSCRIPTEN)
         PUBLIC
             emdawnwebgpu
     )
-    # NOTE(dr): Dawn backend must be enabled to work with Emdawnwebgpu but this will cause an error
-    # during Emscripten builds as ImGui expects neither native backend to be enabled. Commenting out
-    # the line given in the error message seems to be enough to work around the issue for now.
-    #
-    # Related PR: https://github.com/ocornut/imgui/pull/8831
-    #
+    # NOTE(dr): Using a fork of ImGui that enables use of Emdawnwebgpu
     target_compile_definitions(
         imgui
         PUBLIC
-            IMGUI_IMPL_WEBGPU_BACKEND_DAWN
+            IMGUI_IMPL_WEBGPU_EMDAWNWEBGPU
+
     )
 else()
     # Link to native backend if not compiling with Emscripten
