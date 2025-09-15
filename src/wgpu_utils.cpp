@@ -1,5 +1,6 @@
 #include "wgpu_utils.hpp"
 
+#include <cstdint>
 #include <vector>
 
 #include <fmt/core.h>
