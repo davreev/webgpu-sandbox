@@ -25,6 +25,14 @@ target_compile_options(
 )
 
 if(EMSCRIPTEN)
+    # NOTE(dr): Using Emdawnwebgpu for Emscripten builds as its webgpu.h is more up to date
+    include(deps/emdawnwebgpu)
+    target_link_libraries(
+        wgpu-app
+        PUBLIC
+            emdawnwebgpu
+    )
+
     # Set Emscripten compiler options
     target_link_options(
         wgpu-app
@@ -35,15 +43,8 @@ if(EMSCRIPTEN)
             "$<$<CONFIG:Debug>:-sASSERTIONS=2>"
             "$<$<CONFIG:Debug>:-gsource-map>"
     )
-
-    # NOTE(dr): Using Emdawnwebgpu for Emscripten builds as its webgpu.h is more up to date
-    include(deps/emdawnwebgpu)
-    target_link_libraries(
-        wgpu-app
-        PUBLIC
-            emdawnwebgpu
-    )
 else()
+    # Link to native backend if not compiling with Emscripten
     add_library(
         wgpu-glfw STATIC
         "wgpu_glfw.c"

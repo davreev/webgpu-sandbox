@@ -76,7 +76,7 @@ struct GpuContext
             };
 
         // Create WebGPU device
-        result.device = request_device(result.adapter, &device_desc);
+        result.device = request_device(result.instance, result.adapter, &device_desc);
         assert(result.device);
 
         result.surface_format = WGPUTextureFormat_BGRA8Unorm;

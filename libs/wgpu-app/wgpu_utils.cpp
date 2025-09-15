@@ -87,6 +87,28 @@ void report_limits(WGPULimits const& limits)
     fmt::println("\tmaxComputeWorkgroupsPerDimension: {}", limits.maxComputeWorkgroupsPerDimension);
 }
 
+[[maybe_unused]]
+WGPUWaitStatus wait_for_future(
+    WGPUInstance const instance,
+    WGPUFuture const future,
+    std::uint64_t const poll_freq = 200 * 1000)
+{
+    WGPUFutureWaitInfo info = {};
+    info.future = future;
+
+    WGPUWaitStatus status;
+    do
+    {
+        // DEBUG(dr): wgpu-native doesn't implement wgpuInstanceWaitAny
+        // (https://github.com/gfx-rs/wgpu-native/issues/510). Could try polling via
+        // wgpuInstanceProcessEvents instead.
+
+        status = wgpuInstanceWaitAny(instance, 1, &info, poll_freq);
+    } while (status == WGPUWaitStatus_TimedOut);
+
+    return status;
+}
+
 } // namespace
 
 void raise_event([[maybe_unused]] char const* name)
@@ -156,17 +178,30 @@ WGPUAdapter request_adapter(
                 resp->adapter = adapter;
             else
                 fmt::println("Could not get WebGPU adapter. Message: {}", message.data);
+
             raise_event("wgpuAdapterReady");
         };
 
+#if true
+    // NOTE(dr): Request isn't actually async with wgpu-native
     wgpuInstanceRequestAdapter(instance, options, cb_info);
     wait_for_event("wgpuAdapterReady");
+
+#else
+    // NOTE(dr): Request must be handled as async with dawn/wgvk
+    WGPUFuture const fut = wgpuInstanceRequestAdapter(instance, options, cb_info);
+    wait_for_future(instance, fut);
+
+#endif
 
     assert(result.adapter);
     return result.adapter;
 }
 
-WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const* const desc)
+WGPUDevice request_device(
+    [[maybe_unused]] WGPUInstance const instance,
+    WGPUAdapter const adapter,
+    WGPUDeviceDescriptor const* const desc)
 {
     struct Result
     {
@@ -187,11 +222,21 @@ WGPUDevice request_device(WGPUAdapter const adapter, WGPUDeviceDescriptor const*
                 result->device = device;
             else
                 fmt::println("Could not get WebGPU device. Message: {}", message.data);
+
             raise_event("wgpuDeviceReady");
         };
 
+#if true
+    // NOTE(dr): Request isn't actually async with wgpu-native
     wgpuAdapterRequestDevice(adapter, desc, cb_info);
     wait_for_event("wgpuDeviceReady");
+
+#else
+    // NOTE(dr): Request must be handled as async with dawn/wgvk
+    WGPUFuture const fut = wgpuAdapterRequestDevice(adapter, desc, cb_info);
+    wait_for_future(instance, fut);
+
+#endif
 
     assert(result.device);
     return result.device;

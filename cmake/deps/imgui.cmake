@@ -48,8 +48,27 @@ target_link_libraries(
         imgui::imgui
 )
 
-# Link to native backend if not compiling with Emscripten
-if(NOT EMSCRIPTEN)
+if(EMSCRIPTEN)
+    # NOTE(dr): Using Emdawnwebgpu for Emscripten builds as its webgpu.h is more up to date
+    include(deps/emdawnwebgpu)
+    target_link_libraries(
+        imgui
+        PUBLIC
+            emdawnwebgpu
+    )
+    # NOTE(dr): Dawn backend must be enabled to work with Emdawnwebgpu. This will cause an error
+    # during Emscripten builds as ImGui expects neither native backend to be enabled. Disabling
+    # the #error seems to be enough to work around the issue for now.
+    #
+    # Related PR: https://github.com/ocornut/imgui/pull/8831
+    #
+    target_compile_definitions(
+        imgui
+        PUBLIC
+            IMGUI_IMPL_WEBGPU_BACKEND_DAWN
+    )
+else()
+    # Link to native backend if not compiling with Emscripten
     include(deps/glfw)
     include(deps/wgpu-native)
     target_link_libraries(

@@ -27,7 +27,10 @@ WGPUAdapter request_adapter(
     WGPUInstance instance,
     WGPURequestAdapterOptions const* options = nullptr);
 
-WGPUDevice request_device(WGPUAdapter adapter, WGPUDeviceDescriptor const* desc = nullptr);
+WGPUDevice request_device(
+    WGPUInstance instance,
+    WGPUAdapter adapter,
+    WGPUDeviceDescriptor const* desc = nullptr);
 
 void report_adapter_features(WGPUAdapter adapter);
 
