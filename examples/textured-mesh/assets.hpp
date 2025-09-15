@@ -5,7 +5,7 @@
 #include <dr/basic_types.hpp>
 #include <dr/string.hpp>
 
-#include "../shared/dr_shim.hpp"
+#include "../dr_shim.hpp"
 
 namespace wgpu::sandbox
 {

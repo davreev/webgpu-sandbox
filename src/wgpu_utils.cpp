@@ -32,7 +32,7 @@ EM_JS(void, js_get_canvas_client_size, (int* dst_offset), {
 // clang-format on
 #endif
 
-namespace wgpu
+namespace wgpu::sandbox
 {
 namespace
 {

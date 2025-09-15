@@ -6,7 +6,7 @@
 
 #include <webgpu/webgpu.h>
 
-namespace wgpu
+namespace wgpu::sandbox
 {
 
 void raise_event(char const* name);

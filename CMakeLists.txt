@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 project(
     webgpu-sandbox
-    VERSION 0.3.0
+    VERSION 0.4.0
     LANGUAGES C CXX
 )
 
@@ -16,18 +16,17 @@ list(
     PREPEND CMAKE_MODULE_PATH 
     "${CMAKE_CURRENT_LIST_DIR}/cmake"
 )
-include(app-utils)
 
 # Show FetchContent download progress
 set(FETCHCONTENT_QUIET FALSE)
 
 #
-# Targets
+# Target config
 #
 
-add_subdirectory(libs)
+add_subdirectory(src)
 
-option(WEBGPU_SANDBOX_APPS "Generate app targets" ON)
-if(WEBGPU_SANDBOX_APPS)
-    add_subdirectory(apps)
+option(WEBGPU_SANDBOX_EXAMPLES "Generate example targets" ON)
+if(WEBGPU_SANDBOX_EXAMPLES)
+    add_subdirectory(examples)
 endif()

@@ -7,19 +7,16 @@
 #include <emscripten/html5.h>
 #endif
 
+#include <dr/basic_types.hpp>
+#include <dr/defer.hpp>
+
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
-#include <dr/container_utils.hpp>
-#include <dr/defer.hpp>
-#include <dr/memory.hpp>
-#include <dr/span.hpp>
-
+#include <wgpu_imgui.hpp>
 #include <wgpu_utils.hpp>
 
-#include "../shared/dr_shim.hpp"
+#include "../dr_shim.hpp"
 #include "graphics.h"
-#include "shader_src.hpp"
 
 namespace wgpu::sandbox
 {
@@ -44,7 +41,7 @@ struct GpuContext
 
 #ifdef __EMSCRIPTEN__
         // Get WebGPU surface from the HTML canvas
-        result.surface = make_surface(result.instance, "#indexed-mesh");
+        result.surface = make_surface(result.instance, "#hello-imgui");
 #else
         // Get WebGPU surface from GLFW window
         result.surface = make_surface(result.instance, window);
@@ -121,14 +118,17 @@ struct RenderPass
     WGPURenderPassEncoder encoder;
     WGPUTextureView surface_view;
 
-    static RenderPass begin(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
+    static RenderPass begin(
+        WGPUCommandEncoder const cmd_encoder,
+        WGPUSurface const surface,
+        WGPUColor const& clear_color)
     {
         RenderPass result{};
 
         result.surface_view = surface_make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(cmd_encoder, result.surface_view);
+        result.encoder = render_pass_begin(cmd_encoder, result.surface_view, &clear_color);
         assert(result.encoder);
 
         return result;
@@ -142,92 +142,46 @@ struct RenderPass
     }
 };
 
-struct RenderMesh
+struct UI
 {
-    static constexpr WGPUIndexFormat index_format{WGPUIndexFormat_Uint16};
-    WGPUBuffer vertices;
-    WGPUBuffer indices;
-    isize index_count;
-
-    static RenderMesh make(
-        WGPUDevice const device,
-        Span<u8 const> const& vertex_data,
-        Span<u8 const> const& index_data)
+    static void init(GLFWwindow* window, GpuContext const& gpu)
     {
-        RenderMesh result{};
+        ImGui::CreateContext();
 
-        // Create buffers
-        result.vertices = render_mesh_make_buffer(
-            device,
-            vertex_data.size(),
-            WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
-        assert(result.vertices);
+        ImGuiIO& io = ImGui::GetIO();
+        {
+            io.IniFilename = nullptr;
+            io.LogFilename = nullptr;
+            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            // ...
+        }
 
-        result.indices = render_mesh_make_buffer(
-            device,
-            index_data.size(),
-            WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
-        assert(result.indices);
+        ImGui::StyleColorsDark();
 
-        auto const unmap = defer([&]() {
-            wgpuBufferUnmap(result.vertices);
-            wgpuBufferUnmap(result.indices);
-        });
+        // Init GLFW impl
+        ImGui_ImplGlfw_InitForOther(window, true);
 
-        // Copy data to buffers
-        auto const copy_data = [](WGPUBuffer const dst, Span<u8 const> const& src) {
-            void* dst_ptr = wgpuBufferGetMappedRange(dst, 0, src.size());
-            assert(dst_ptr);
-            std::memcpy(dst_ptr, src.data(), src.size());
-        };
-        copy_data(result.vertices, vertex_data);
-        copy_data(result.indices, index_data);
-
-        constexpr i8 index_stride = sizeof(u16);
-        result.index_count = index_data.size() / index_stride;
-
-        return result;
+        // Init WebGPU impl
+        ImGui_ImplWGPU_InitInfo config{};
+        {
+            config.Device = gpu.device;
+            config.NumFramesInFlight = 3;
+            config.RenderTargetFormat = gpu.surface_format;
+            config.DepthStencilFormat = WGPUTextureFormat_Undefined;
+        }
+        ImGui_ImplWGPU_Init(&config);
     }
 
-    static RenderMesh make_quad(WGPUDevice const device)
+    static void deinit()
     {
-        // Format: x, y, z, u, v
-        static constexpr f32 vertices[][4]{
-            {-0.5, -0.5, 0.0, 0.0},
-            {0.5, -0.5, 1.0, 0.0},
-            {-0.5, 0.5, 0.0, 1.0},
-            {0.5, 0.5, 1.0, 1.0},
-        };
-
-        static constexpr u16 faces[][3]{
-            {0, 1, 2},
-            {3, 2, 1},
-        };
-
-        return make(device, as<u8>(as_span(vertices)), as<u8>(as_span(faces)));
+        ImGui_ImplWGPU_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
     }
 
-    static void release(RenderMesh& mesh)
+    static void dispatch_draw(WGPURenderPassEncoder const encoder)
     {
-        wgpuBufferRelease(mesh.vertices);
-        wgpuBufferRelease(mesh.indices);
-        mesh = {};
-    }
-
-    void bind_resources(WGPURenderPassEncoder const encoder)
-    {
-        wgpuRenderPassEncoderSetVertexBuffer(encoder, 0, vertices, 0, wgpuBufferGetSize(vertices));
-        wgpuRenderPassEncoderSetIndexBuffer(
-            encoder,
-            indices,
-            index_format,
-            0,
-            wgpuBufferGetSize(indices));
-    }
-
-    void dispatch_draw(WGPURenderPassEncoder const encoder) const
-    {
-        wgpuRenderPassEncoderDrawIndexed(encoder, index_count, 1, 0, 0, 0);
+        ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), encoder);
     }
 };
 
@@ -235,8 +189,7 @@ struct AppState
 {
     GLFWwindow* window;
     GpuContext gpu;
-    WGPURenderPipeline pipeline;
-    RenderMesh geometry;
+    float clear_color[3]{0.8f, 0.2f, 0.4f};
 };
 
 AppState state{};
@@ -253,7 +206,7 @@ void init_app()
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    wgpu::get_canvas_client_size(init_width, init_height);
+    get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -262,7 +215,7 @@ void init_app()
     state.window = glfwCreateWindow(
         init_width,
         init_height,
-        "WebGPU Sandbox: Indexed Mesh",
+        "WebGPU Sandbox: Hello ImGui",
         nullptr,
         nullptr);
     assert(state.window);
@@ -275,7 +228,7 @@ void init_app()
     auto constexpr resize_cb =
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
         int w, h;
-        wgpu::get_canvas_client_size(w, h);
+        get_canvas_client_size(w, h);
         glfwSetWindowSize(state.window, w, h);
         return true;
     };
@@ -287,24 +240,48 @@ void init_app()
     });
 #endif
 
-    // Create render pipeline
-    state.pipeline = make_render_pipeline(
-        state.gpu.device,
-        {shader_src, WGPU_STRLEN},
-        state.gpu.surface_format);
-
-    // Create geometry
-    state.geometry = RenderMesh::make_quad(state.gpu.device);
+    UI::init(state.window, state.gpu);
 }
 
 void deinit_app()
 {
-    RenderMesh::release(state.geometry);
-    wgpuRenderPipelineRelease(state.pipeline);
+    UI::deinit();
     GpuContext::release(state.gpu);
     glfwDestroyWindow(state.window);
     glfwTerminate();
     state = {};
+}
+
+void draw_ui()
+{
+    ImGui_ImplWGPU_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::SetNextWindowPos({10.0f, 10.0f}, ImGuiCond_FirstUseEver);
+    constexpr int window_flags = ImGuiWindowFlags_AlwaysAutoResize;
+
+    ImGui::Begin("Hello ImGui", nullptr, window_flags);
+
+    if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None))
+    {
+        if (ImGui::BeginTabItem("Settings"))
+        {
+            ImGui::ColorEdit3("Clear color", state.clear_color);
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("About"))
+        {
+            ImGui::TextWrapped("Demo of ImGui with WebGPU/GLFW backend");
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+    }
+
+    ImGui::End();
+    ImGui::Render();
 }
 
 } // namespace
@@ -317,9 +294,15 @@ int main(int /*argc*/, char** /*argv*/)
     init_app();
     auto const _ = defer([]() { deinit_app(); });
 
-    // Main loop body
+    // Main loop
     constexpr auto loop_body = []() {
         glfwPollEvents();
+
+        // NOTE(dr): Use ImGuiIO::WantCapture* flags to determine if input events should be
+        // forwarded to the main application. In general, when one of these flags is true, the
+        // corresponding event should be consumed by ImGui.
+
+        draw_ui();
 
         // Create a command encoder from the device
         WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
@@ -330,12 +313,18 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface);
+            constexpr auto to_wgpu_color = [](float const c[3]) -> WGPUColor {
+                return {c[0], c[1], c[2], 1.0};
+            };
+
+            RenderPass pass = RenderPass::begin(
+                cmd_encoder,
+                state.gpu.surface,
+                to_wgpu_color(state.clear_color));
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
-            wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
-            state.geometry.bind_resources(pass.encoder);
-            state.geometry.dispatch_draw(pass.encoder);
+            // Issue UI draw command
+            UI::dispatch_draw(pass.encoder);
         }
 
         // Create encoded commands

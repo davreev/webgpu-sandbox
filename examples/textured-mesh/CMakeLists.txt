@@ -6,18 +6,15 @@ add_executable(
     "graphics.c"
     "impl.cpp"
     "main.cpp"
-    "${shared_src_dir}/file_utils.cpp"
-    "${shared_src_dir}/gfx_utils.cpp"
 )
 
 include(deps/dr)
 include(deps/stb-image)
 target_link_libraries(
     ${app_name}
-    PRIVATE 
-        dr::dr
+    PRIVATE
+        app-base
         stb::image
-        wgpu-app
 )
 
 if(EMSCRIPTEN)
@@ -34,8 +31,7 @@ endif()
 # Post-build commands
 #
 
-set(src_dir "${CMAKE_CURRENT_LIST_DIR}")
-get_default_runtime_output_dir(runtime_output_dir)
+include(app-utils)
 
 set(
     asset_files

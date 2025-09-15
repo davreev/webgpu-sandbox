@@ -109,3 +109,7 @@ function(copy_web_files)
     add_custom_target(${app_name}-web DEPENDS ${files_out})
     add_dependencies(${app_name} ${app_name}-web)
 endfunction()
+
+
+set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
+get_default_runtime_output_dir(runtime_output_dir)

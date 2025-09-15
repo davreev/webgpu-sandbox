@@ -4,7 +4,7 @@
 
 #include <stb_image.h>
 
-#include "../shared/file_utils.hpp"
+#include "../file_utils.hpp"
 
 namespace wgpu::sandbox
 {

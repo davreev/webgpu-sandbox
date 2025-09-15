@@ -56,9 +56,9 @@ if(EMSCRIPTEN)
         PUBLIC
             emdawnwebgpu
     )
-    # NOTE(dr): Dawn backend must be enabled to work with Emdawnwebgpu. This will cause an error
-    # during Emscripten builds as ImGui expects neither native backend to be enabled. Disabling
-    # the #error seems to be enough to work around the issue for now.
+    # NOTE(dr): Dawn backend must be enabled to work with Emdawnwebgpu but this will cause an error
+    # during Emscripten builds as ImGui expects neither native backend to be enabled. Commenting out
+    # the line given in the error message seems to be enough to work around the issue for now.
     #
     # Related PR: https://github.com/ocornut/imgui/pull/8831
     #
@@ -71,11 +71,13 @@ else()
     # Link to native backend if not compiling with Emscripten
     include(deps/glfw)
     include(deps/wgpu-native)
+    # include(deps/wgvk)
     target_link_libraries(
         imgui-wgpu
         PRIVATE
             glfw::glfw
             wgpu-native
+            # wgvk::wgvk
     )
     target_compile_definitions(
         imgui

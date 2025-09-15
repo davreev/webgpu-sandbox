@@ -10,12 +10,16 @@
 #include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
+#include <dr/container_utils.hpp>
 #include <dr/defer.hpp>
+#include <dr/memory.hpp>
+#include <dr/span.hpp>
 
 #include <wgpu_utils.hpp>
 
-#include "../shared/dr_shim.hpp"
+#include "../dr_shim.hpp"
 #include "graphics.h"
+#include "shader_src.hpp"
 
 namespace wgpu::sandbox
 {
@@ -40,7 +44,7 @@ struct GpuContext
 
 #ifdef __EMSCRIPTEN__
         // Get WebGPU surface from the HTML canvas
-        result.surface = make_surface(result.instance, "#clear-screen");
+        result.surface = make_surface(result.instance, "#indexed-mesh");
 #else
         // Get WebGPU surface from GLFW window
         result.surface = make_surface(result.instance, window);
@@ -138,11 +142,101 @@ struct RenderPass
     }
 };
 
+struct RenderMesh
+{
+    static constexpr WGPUIndexFormat index_format{WGPUIndexFormat_Uint16};
+    WGPUBuffer vertices;
+    WGPUBuffer indices;
+    isize index_count;
+
+    static RenderMesh make(
+        WGPUDevice const device,
+        Span<u8 const> const& vertex_data,
+        Span<u8 const> const& index_data)
+    {
+        RenderMesh result{};
+
+        // Create buffers
+        result.vertices = render_mesh_make_buffer(
+            device,
+            vertex_data.size(),
+            WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
+        assert(result.vertices);
+
+        result.indices = render_mesh_make_buffer(
+            device,
+            index_data.size(),
+            WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
+        assert(result.indices);
+
+        auto const unmap = defer([&]() {
+            wgpuBufferUnmap(result.vertices);
+            wgpuBufferUnmap(result.indices);
+        });
+
+        // Copy data to buffers
+        auto const copy_data = [](WGPUBuffer const dst, Span<u8 const> const& src) {
+            void* dst_ptr = wgpuBufferGetMappedRange(dst, 0, src.size());
+            assert(dst_ptr);
+            std::memcpy(dst_ptr, src.data(), src.size());
+        };
+        copy_data(result.vertices, vertex_data);
+        copy_data(result.indices, index_data);
+
+        constexpr i8 index_stride = sizeof(u16);
+        result.index_count = index_data.size() / index_stride;
+
+        return result;
+    }
+
+    static RenderMesh make_quad(WGPUDevice const device)
+    {
+        // Format: x, y, z, u, v
+        static constexpr f32 vertices[][4]{
+            {-0.5, -0.5, 0.0, 0.0},
+            {0.5, -0.5, 1.0, 0.0},
+            {-0.5, 0.5, 0.0, 1.0},
+            {0.5, 0.5, 1.0, 1.0},
+        };
+
+        static constexpr u16 faces[][3]{
+            {0, 1, 2},
+            {3, 2, 1},
+        };
+
+        return make(device, as<u8>(as_span(vertices)), as<u8>(as_span(faces)));
+    }
+
+    static void release(RenderMesh& mesh)
+    {
+        wgpuBufferRelease(mesh.vertices);
+        wgpuBufferRelease(mesh.indices);
+        mesh = {};
+    }
+
+    void bind_resources(WGPURenderPassEncoder const encoder)
+    {
+        wgpuRenderPassEncoderSetVertexBuffer(encoder, 0, vertices, 0, wgpuBufferGetSize(vertices));
+        wgpuRenderPassEncoderSetIndexBuffer(
+            encoder,
+            indices,
+            index_format,
+            0,
+            wgpuBufferGetSize(indices));
+    }
+
+    void dispatch_draw(WGPURenderPassEncoder const encoder) const
+    {
+        wgpuRenderPassEncoderDrawIndexed(encoder, index_count, 1, 0, 0, 0);
+    }
+};
+
 struct AppState
 {
     GLFWwindow* window;
     GpuContext gpu;
-    usize frame_count;
+    WGPURenderPipeline pipeline;
+    RenderMesh geometry;
 };
 
 AppState state{};
@@ -159,7 +253,7 @@ void init_app()
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    wgpu::get_canvas_client_size(init_width, init_height);
+    get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -168,7 +262,7 @@ void init_app()
     state.window = glfwCreateWindow(
         init_width,
         init_height,
-        "WebGPU Sandbox: Clear Screen",
+        "WebGPU Sandbox: Indexed Mesh",
         nullptr,
         nullptr);
     assert(state.window);
@@ -181,7 +275,7 @@ void init_app()
     auto constexpr resize_cb =
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
         int w, h;
-        wgpu::get_canvas_client_size(w, h);
+        get_canvas_client_size(w, h);
         glfwSetWindowSize(state.window, w, h);
         return true;
     };
@@ -193,19 +287,20 @@ void init_app()
     });
 #endif
 
-#ifndef __EMSCRIPTEN__
-    // NOTE(dr): Report utils are only compatible with wgpu-native for now
-    wgpu::report_adapter_features(state.gpu.adapter);
-    wgpu::report_adapter_limits(state.gpu.adapter);
-    wgpu::report_adapter_properties(state.gpu.adapter);
-    wgpu::report_device_features(state.gpu.device);
-    wgpu::report_device_limits(state.gpu.device);
-    wgpu::report_surface_capabilities(state.gpu.surface, state.gpu.adapter);
-#endif
+    // Create render pipeline
+    state.pipeline = make_render_pipeline(
+        state.gpu.device,
+        {shader_src, WGPU_STRLEN},
+        state.gpu.surface_format);
+
+    // Create geometry
+    state.geometry = RenderMesh::make_quad(state.gpu.device);
 }
 
 void deinit_app()
 {
+    RenderMesh::release(state.geometry);
+    wgpuRenderPipelineRelease(state.pipeline);
     GpuContext::release(state.gpu);
     glfwDestroyWindow(state.window);
     glfwTerminate();
@@ -238,7 +333,9 @@ int main(int /*argc*/, char** /*argv*/)
             RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface);
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
-            // NOTE(dr): Render pass clears the screen by default
+            wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
+            state.geometry.bind_resources(pass.encoder);
+            state.geometry.dispatch_draw(pass.encoder);
         }
 
         // Create encoded commands
@@ -249,30 +346,6 @@ int main(int /*argc*/, char** /*argv*/)
         // Submit encoded commands
         WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
         wgpuQueueSubmit(queue, 1, &cmds);
-
-        // Register callback that fires when queued work is done
-        WGPUQueueWorkDoneCallbackInfo cb_info = {};
-        cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
-        cb_info.callback =
-#ifdef __EMSCRIPTEN__
-            // NOTE(dr): Callback from webgpu.h in Emdawnwebgpu has additional params
-            [](WGPUQueueWorkDoneStatus const status,
-               WGPUStringView /*msg*/,
-               void* /*userdata1*/,
-               void* /*userdata2*/) {
-#else
-            [](WGPUQueueWorkDoneStatus const status, void* /*userdata1*/, void* /*userdata2*/) {
-#endif
-                if (state.frame_count % 100 == 0)
-                {
-                    fmt::print(
-                        "Finished frame {} with status: {}\n",
-                        state.frame_count,
-                        wgpu::to_string(status));
-                }
-                ++state.frame_count;
-            };
-        wgpuQueueOnSubmittedWorkDone(queue, cb_info);
     };
 
     // Main loop

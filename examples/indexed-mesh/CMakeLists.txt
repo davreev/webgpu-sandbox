@@ -1,4 +1,4 @@
-set(app_name "hello-triangle")
+set(app_name indexed-mesh)
 
 add_executable(
     ${app_name}
@@ -9,17 +9,15 @@ add_executable(
 include(deps/dr)
 target_link_libraries(
     ${app_name}
-    PRIVATE 
-        dr::dr
-        wgpu-app
+    PRIVATE
+        app-base
 )
 
 #
 # Post-build commands
 #
 
-set(src_dir "${CMAKE_CURRENT_LIST_DIR}")
-get_default_runtime_output_dir(runtime_output_dir)
+include(app-utils)
 
 if(EMSCRIPTEN)
     set(

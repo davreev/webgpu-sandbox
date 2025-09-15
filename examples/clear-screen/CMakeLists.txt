@@ -10,16 +10,14 @@ include(deps/dr)
 target_link_libraries(
     ${app_name}
     PRIVATE
-        dr::dr
-        wgpu-app
+        app-base
 )
 
 #
 # Post-build commands
 #
 
-set(src_dir "${CMAKE_CURRENT_LIST_DIR}")
-get_default_runtime_output_dir(runtime_output_dir)
+include(app-utils)
 
 if(EMSCRIPTEN)
     set(

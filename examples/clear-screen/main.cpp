@@ -7,15 +7,14 @@
 #include <emscripten/html5.h>
 #endif
 
+#include <webgpu/webgpu.h>
+
 #include <dr/basic_types.hpp>
 #include <dr/defer.hpp>
 
-#include <webgpu/webgpu.h>
-
-#include <wgpu_imgui.hpp>
 #include <wgpu_utils.hpp>
 
-#include "../shared/dr_shim.hpp"
+#include "../dr_shim.hpp"
 #include "graphics.h"
 
 namespace wgpu::sandbox
@@ -41,7 +40,7 @@ struct GpuContext
 
 #ifdef __EMSCRIPTEN__
         // Get WebGPU surface from the HTML canvas
-        result.surface = make_surface(result.instance, "#hello-imgui");
+        result.surface = make_surface(result.instance, "#clear-screen");
 #else
         // Get WebGPU surface from GLFW window
         result.surface = make_surface(result.instance, window);
@@ -118,17 +117,14 @@ struct RenderPass
     WGPURenderPassEncoder encoder;
     WGPUTextureView surface_view;
 
-    static RenderPass begin(
-        WGPUCommandEncoder const cmd_encoder,
-        WGPUSurface const surface,
-        WGPUColor const& clear_color)
+    static RenderPass begin(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
     {
         RenderPass result{};
 
         result.surface_view = surface_make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(cmd_encoder, result.surface_view, &clear_color);
+        result.encoder = render_pass_begin(cmd_encoder, result.surface_view);
         assert(result.encoder);
 
         return result;
@@ -142,54 +138,11 @@ struct RenderPass
     }
 };
 
-struct UI
-{
-    static void init(GLFWwindow* window, GpuContext const& gpu)
-    {
-        ImGui::CreateContext();
-
-        ImGuiIO& io = ImGui::GetIO();
-        {
-            io.IniFilename = nullptr;
-            io.LogFilename = nullptr;
-            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-            // ...
-        }
-
-        ImGui::StyleColorsDark();
-
-        // Init GLFW impl
-        ImGui_ImplGlfw_InitForOther(window, true);
-
-        // Init WebGPU impl
-        ImGui_ImplWGPU_InitInfo config{};
-        {
-            config.Device = gpu.device;
-            config.NumFramesInFlight = 3;
-            config.RenderTargetFormat = gpu.surface_format;
-            config.DepthStencilFormat = WGPUTextureFormat_Undefined;
-        }
-        ImGui_ImplWGPU_Init(&config);
-    }
-
-    static void deinit()
-    {
-        ImGui_ImplWGPU_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-    }
-
-    static void dispatch_draw(WGPURenderPassEncoder const encoder)
-    {
-        ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), encoder);
-    }
-};
-
 struct AppState
 {
     GLFWwindow* window;
     GpuContext gpu;
-    float clear_color[3]{0.8f, 0.2f, 0.4f};
+    usize frame_count;
 };
 
 AppState state{};
@@ -206,7 +159,7 @@ void init_app()
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    wgpu::get_canvas_client_size(init_width, init_height);
+    get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -215,7 +168,7 @@ void init_app()
     state.window = glfwCreateWindow(
         init_width,
         init_height,
-        "WebGPU Sandbox: Hello ImGui",
+        "WebGPU Sandbox: Clear Screen",
         nullptr,
         nullptr);
     assert(state.window);
@@ -228,7 +181,7 @@ void init_app()
     auto constexpr resize_cb =
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
         int w, h;
-        wgpu::get_canvas_client_size(w, h);
+        get_canvas_client_size(w, h);
         glfwSetWindowSize(state.window, w, h);
         return true;
     };
@@ -240,48 +193,23 @@ void init_app()
     });
 #endif
 
-    UI::init(state.window, state.gpu);
+#ifndef __EMSCRIPTEN__
+    // NOTE(dr): Report utils are only compatible with wgpu-native for now
+    report_adapter_features(state.gpu.adapter);
+    report_adapter_limits(state.gpu.adapter);
+    report_adapter_properties(state.gpu.adapter);
+    report_device_features(state.gpu.device);
+    report_device_limits(state.gpu.device);
+    report_surface_capabilities(state.gpu.surface, state.gpu.adapter);
+#endif
 }
 
 void deinit_app()
 {
-    UI::deinit();
     GpuContext::release(state.gpu);
     glfwDestroyWindow(state.window);
     glfwTerminate();
     state = {};
-}
-
-void draw_ui()
-{
-    ImGui_ImplWGPU_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    ImGui::SetNextWindowPos({10.0f, 10.0f}, ImGuiCond_FirstUseEver);
-    constexpr int window_flags = ImGuiWindowFlags_AlwaysAutoResize;
-
-    ImGui::Begin("Hello ImGui", nullptr, window_flags);
-
-    if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None))
-    {
-        if (ImGui::BeginTabItem("Settings"))
-        {
-            ImGui::ColorEdit3("Clear color", state.clear_color);
-            ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("About"))
-        {
-            ImGui::TextWrapped("Demo of ImGui with WebGPU/GLFW backend");
-            ImGui::EndTabItem();
-        }
-
-        ImGui::EndTabBar();
-    }
-
-    ImGui::End();
-    ImGui::Render();
 }
 
 } // namespace
@@ -294,15 +222,9 @@ int main(int /*argc*/, char** /*argv*/)
     init_app();
     auto const _ = defer([]() { deinit_app(); });
 
-    // Main loop
+    // Main loop body
     constexpr auto loop_body = []() {
         glfwPollEvents();
-
-        // NOTE(dr): Use ImGuiIO::WantCapture* flags to determine if input events should be
-        // forwarded to the main application. In general, when one of these flags is true, the
-        // corresponding event should be consumed by ImGui.
-
-        draw_ui();
 
         // Create a command encoder from the device
         WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
@@ -313,18 +235,10 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Render pass
         {
-            constexpr auto to_wgpu_color = [](float const c[3]) -> WGPUColor {
-                return {c[0], c[1], c[2], 1.0};
-            };
-
-            RenderPass pass = RenderPass::begin(
-                cmd_encoder,
-                state.gpu.surface,
-                to_wgpu_color(state.clear_color));
+            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface);
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
-            // Issue UI draw command
-            UI::dispatch_draw(pass.encoder);
+            // NOTE(dr): Render pass clears the screen by default
         }
 
         // Create encoded commands
@@ -335,6 +249,30 @@ int main(int /*argc*/, char** /*argv*/)
         // Submit encoded commands
         WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
         wgpuQueueSubmit(queue, 1, &cmds);
+
+        // Register callback that fires when queued work is done
+        WGPUQueueWorkDoneCallbackInfo cb_info = {};
+        cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
+        cb_info.callback =
+#ifdef __EMSCRIPTEN__
+            // NOTE(dr): Callback from webgpu.h in Emdawnwebgpu has additional params
+            [](WGPUQueueWorkDoneStatus const status,
+               WGPUStringView /*msg*/,
+               void* /*userdata1*/,
+               void* /*userdata2*/) {
+#else
+            [](WGPUQueueWorkDoneStatus const status, void* /*userdata1*/, void* /*userdata2*/) {
+#endif
+                if (state.frame_count % 100 == 0)
+                {
+                    fmt::print(
+                        "Finished frame {} with status: {}\n",
+                        state.frame_count,
+                        to_string(status));
+                }
+                ++state.frame_count;
+            };
+        wgpuQueueOnSubmittedWorkDone(queue, cb_info);
     };
 
     // Main loop

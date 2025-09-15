@@ -1,12 +1,12 @@
 add_library(
     wgpu-app STATIC
-    "wgpu_utils.cpp"
+    wgpu_utils.cpp
 )
 
 target_include_directories(
     wgpu-app
     PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}"
+        ${CMAKE_CURRENT_LIST_DIR}
 )
 
 include(deps/fmt)
@@ -47,16 +47,18 @@ else()
     # Link to native backend if not compiling with Emscripten
     add_library(
         wgpu-glfw STATIC
-        "wgpu_glfw.c"
+        wgpu_glfw.c
     )
 
     include(deps/glfw)
     include(deps/wgpu-native)
+    # include(deps/wgvk)
     target_link_libraries(
         wgpu-glfw 
         PUBLIC
             glfw::glfw
             wgpu-native
+            # wgvk::wgvk
     )
 
     if(APPLE)

@@ -15,7 +15,7 @@
 
 #include <wgpu_utils.hpp>
 
-#include "../shared/dr_shim.hpp"
+#include "../dr_shim.hpp"
 #include "utils.h"
 
 namespace wgpu::sandbox
@@ -193,7 +193,7 @@ int main(int /*argc*/, char** /*argv*/)
                     fmt::print("]\n");
                 }
 #ifdef __EMSCRIPTEN__
-                wgpu::raise_event("resultReady");
+                raise_event("resultReady");
 #endif
             };
 
@@ -201,7 +201,7 @@ int main(int /*argc*/, char** /*argv*/)
 
         // Wait until async work is done
 #ifdef __EMSCRIPTEN__
-        wgpu::wait_for_event("resultReady");
+        wait_for_event("resultReady");
 #else
         wgpuDevicePoll(state.gpu.device, true, nullptr);
 #endif

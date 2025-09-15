@@ -14,7 +14,7 @@
 
 #include <wgpu_utils.hpp>
 
-#include "../shared/dr_shim.hpp"
+#include "../dr_shim.hpp"
 #include "graphics.h"
 #include "shader_src.hpp"
 
@@ -160,7 +160,7 @@ void init_app()
     // Create GLFW window
 #ifdef __EMSCRIPTEN__
     int init_width, init_height;
-    wgpu::get_canvas_client_size(init_width, init_height);
+    get_canvas_client_size(init_width, init_height);
 #else
     constexpr int init_width = 800;
     constexpr int init_height = 600;
@@ -182,7 +182,7 @@ void init_app()
     auto constexpr resize_cb =
         [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
         int w, h;
-        wgpu::get_canvas_client_size(w, h);
+        get_canvas_client_size(w, h);
         glfwSetWindowSize(state.window, w, h);
         return true;
     };
