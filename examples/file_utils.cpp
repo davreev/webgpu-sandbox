@@ -40,7 +40,7 @@ bool read_binary_file(char const* const path, DynamicArray<u8>& buffer)
 
 bool append_binary_file(char const* const path, DynamicArray<u8>& buffer)
 {
-    std::ifstream in{path, std::ios::in};
+    std::ifstream in{path, std::ios::in | std::ios::binary};
     if (!in)
         return false;
 
