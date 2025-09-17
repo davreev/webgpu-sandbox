@@ -314,70 +314,17 @@ struct RenderMaterial
     static inline WGPURenderPipeline pipeline{};
     struct
     {
-        struct
-        {
-            WGPUTexture texture;
-            WGPUTextureView view;
-            WGPUSampler sampler;
-        } color_map;
-    } static inline defaults{};
+        WGPUTexture texture;
+        WGPUTextureView view;
+        WGPUSampler sampler;
+    } static inline color_map;
 
-    struct Instance
+    WGPUBuffer uniform_buffer;
+    WGPUBindGroup bind_group;
+    struct
     {
-        struct
-        {
-            f32 local_to_clip[16];
-        } uniforms{};
-
-        WGPUBuffer uniform_buffer;
-        WGPUBindGroup bind_group;
-
-        static Instance make(WGPUDevice const device)
-        {
-            Instance result{};
-
-            result.uniform_buffer = render_material_make_uniform_buffer(device, sizeof(uniforms));
-            assert(result.uniform_buffer);
-
-            result.update_bind_group(device);
-            return result;
-        }
-
-        static void release(Instance& instance)
-        {
-            wgpuBufferRelease(instance.uniform_buffer);
-            wgpuBindGroupRelease(instance.bind_group);
-            instance = {};
-        }
-
-        void update_bind_group(WGPUDevice const device)
-        {
-            if (bind_group)
-                wgpuBindGroupRelease(bind_group);
-            bind_group = render_material_make_bind_group(
-                device,
-                bind_group_layout,
-                defaults.color_map.view,
-                defaults.color_map.sampler,
-                uniform_buffer);
-            assert(bind_group);
-        }
-
-        void update_uniform_buffer(WGPUQueue const queue)
-        {
-            wgpuQueueWriteBuffer(queue, uniform_buffer, 0, &uniforms, sizeof(uniforms));
-        }
-
-        void apply_pipeline(WGPURenderPassEncoder const encoder)
-        {
-            wgpuRenderPassEncoderSetPipeline(encoder, pipeline);
-        }
-
-        void bind_resources(WGPURenderPassEncoder const encoder)
-        {
-            wgpuRenderPassEncoderSetBindGroup(encoder, 0, bind_group, 0, nullptr);
-        }
-    };
+        f32 local_to_clip[16];
+    } uniforms{};
 
     static void init(WGPUDevice const device, WGPUTextureFormat const surface_format)
     {
@@ -396,9 +343,8 @@ struct RenderMaterial
             assert(pipeline);
         }
 
-        // Init default resources
+        // Init color map
         {
-            auto& color_map = defaults.color_map;
             ImageAsset const& asset = load_image_asset("assets/images/cube-faces.png");
             color_map.texture = render_material_make_color_texture(
                 device,
@@ -416,10 +362,10 @@ struct RenderMaterial
 
     static void deinit()
     {
-        wgpuTextureViewRelease(defaults.color_map.view);
-        wgpuSamplerRelease(defaults.color_map.sampler);
-        wgpuTextureRelease(defaults.color_map.texture);
-        defaults = {};
+        wgpuTextureViewRelease(color_map.view);
+        wgpuSamplerRelease(color_map.sampler);
+        wgpuTextureRelease(color_map.texture);
+        color_map = {};
 
         wgpuRenderPipelineRelease(pipeline);
         pipeline = {};
@@ -430,6 +376,53 @@ struct RenderMaterial
         wgpuBindGroupLayoutRelease(bind_group_layout);
         bind_group_layout = {};
     }
+
+    static RenderMaterial make(WGPUDevice const device)
+    {
+        RenderMaterial result{};
+
+        result.uniform_buffer = render_material_make_uniform_buffer(device, sizeof(uniforms));
+        assert(result.uniform_buffer);
+
+        result.update_bind_group(device);
+        return result;
+    }
+
+    static void release(RenderMaterial& material)
+    {
+        wgpuBufferRelease(material.uniform_buffer);
+        wgpuBindGroupRelease(material.bind_group);
+        material = {};
+    }
+
+    void update_bind_group(WGPUDevice const device)
+    {
+        if (bind_group)
+            wgpuBindGroupRelease(bind_group);
+
+        bind_group = render_material_make_bind_group(
+            device,
+            bind_group_layout,
+            color_map.view,
+            color_map.sampler,
+            uniform_buffer);
+        assert(bind_group);
+    }
+
+    void update_uniform_buffer(WGPUQueue const queue)
+    {
+        wgpuQueueWriteBuffer(queue, uniform_buffer, 0, &uniforms, sizeof(uniforms));
+    }
+
+    void apply_pipeline(WGPURenderPassEncoder const encoder)
+    {
+        wgpuRenderPassEncoderSetPipeline(encoder, pipeline);
+    }
+
+    void bind_resources(WGPURenderPassEncoder const encoder)
+    {
+        wgpuRenderPassEncoderSetBindGroup(encoder, 0, bind_group, 0, nullptr);
+    }
 };
 
 struct AppState
@@ -437,7 +430,7 @@ struct AppState
     GLFWwindow* window;
     GpuContext gpu;
     DepthTarget depth;
-    RenderMaterial::Instance material;
+    RenderMaterial material;
     RenderMesh geometry;
     struct
     {
@@ -475,7 +468,11 @@ void init_app()
 
     // Create WebGPU context
     state.gpu = GpuContext::make(state.window);
-    state.depth = DepthTarget::make(state.gpu.device, init_width, init_height);
+
+    // Create additional render targets
+    int fb_size[2];
+    glfwGetFramebufferSize(state.window, fb_size, fb_size + 1);
+    state.depth = DepthTarget::make(state.gpu.device, fb_size[0], fb_size[1]);
 
 #ifdef __EMSCRIPTEN__
     // Handle canvas resize
@@ -502,7 +499,7 @@ void init_app()
 
     // Init materials and create instance
     RenderMaterial::init(state.gpu.device, state.gpu.surface_format);
-    state.material = RenderMaterial::Instance::make(state.gpu.device);
+    state.material = RenderMaterial::make(state.gpu.device);
 
     // Create mesh
     state.geometry = RenderMesh::make_box(state.gpu.device);
@@ -511,7 +508,7 @@ void init_app()
 void deinit_app()
 {
     RenderMesh::release(state.geometry);
-    RenderMaterial::Instance::release(state.material);
+    RenderMaterial::release(state.material);
     DepthTarget::release(state.depth);
     GpuContext::release(state.gpu);
     glfwDestroyWindow(state.window);
