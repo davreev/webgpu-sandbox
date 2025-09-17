@@ -56,6 +56,7 @@ python -m http.server
 
 - https://www.w3.org/TR/webgpu
 - https://www.w3.org/TR/WGSL
+- https://webgpu-native.github.io/webgpu-headers
 - https://github.com/eliemichel/WebGPU-distribution/tree/main
 - https://eliemichel.github.io/LearnWebGPU/index.html
 - https://developer.chrome.com/docs/web-platform/webgpu/build-app
