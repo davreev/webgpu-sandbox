@@ -14,12 +14,12 @@ target_include_directories(
 )
 
 include(deps/fmt)
-include(deps/imgui)
+# include(deps/imgui) # Disabling ImGui for now. WebGPU impl doesn't appear to be compatible with WGVK.
 target_link_libraries(
     wgpu-app
     PUBLIC
         fmt::fmt
-        imgui-wgpu
+        # imgui-wgpu
 )
 
 target_compile_options(
@@ -63,12 +63,14 @@ else()
     )
 
     include(deps/glfw)
-    include(deps/wgpu-native)
+    # include(deps/wgpu-native)
+    include(deps/wgvk)
     target_link_libraries(
         wgpu-glfw 
         PUBLIC
             glfw::glfw
-            wgpu-native
+            # wgpu-native
+            wgvk::wgvk
     )
 
     if(APPLE)
