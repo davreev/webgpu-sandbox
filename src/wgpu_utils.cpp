@@ -179,7 +179,7 @@ WGPUAdapter request_adapter(
     wait_for_event("wgpuAdapterReady");
 #else
     // NOTE(dr): This operation isn't actually async with wgpu-native
-    // wait_for_future(instance, fut);
+    wait_for_future(instance, fut);
 #endif
 
     assert(result.adapter);
@@ -187,7 +187,7 @@ WGPUAdapter request_adapter(
 }
 
 WGPUDevice request_device(
-    WGPUInstance const /*instance*/,
+    WGPUInstance const instance,
     WGPUAdapter const adapter,
     WGPUDeviceDescriptor const* const desc)
 {
@@ -223,7 +223,7 @@ WGPUDevice request_device(
     wait_for_event("wgpuDeviceReady");
 #else
     // NOTE(dr): This operation isn't actually async with wgpu-native
-    // wait_for_future(instance, fut);
+    wait_for_future(instance, fut);
 #endif
 
     assert(result.device);

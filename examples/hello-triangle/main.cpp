@@ -101,6 +101,7 @@ struct GpuContext
             config.height = height;
             config.format = surface_format;
             config.usage = WGPUTextureUsage_RenderAttachment;
+            config.presentMode = WGPUPresentMode_Fifo;
         }
         wgpuSurfaceConfigure(surface, &config);
     }
