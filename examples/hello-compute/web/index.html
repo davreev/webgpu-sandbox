@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"/>
-        <title>WebGPU Sandbox: Buffer Copy</title>
+        <title>WebGPU Sandbox: Hello Compute</title>
         <style type="text/css">
             body {
                 margin: 0;
@@ -31,11 +31,11 @@
         </style>
     </head>
     <body>
-        <canvas class="app" id="buffer-copy" oncontextmenu="event.preventDefault()"></canvas>
+        <canvas class="app" id="hello-compute" oncontextmenu="event.preventDefault()"></canvas>
         <script type="text/javascript">
             // Configure Emscripten module
             var Module = {
-                canvas: document.getElementById("buffer-copy"),
+                canvas: document.getElementById("hello-compute"),
                 eventTarget: new EventTarget(),
                 preRun: [],
                 print: function (text) {
@@ -52,6 +52,6 @@
                 console.log("onerror: " + event.message);
             };
         </script>
-        <script src="buffer-copy.js"></script>
+        <script src="hello-compute.js"></script>
     </body>
 </html>

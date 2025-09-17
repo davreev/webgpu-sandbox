@@ -1,4 +1,4 @@
-set(app_name buffer-copy)
+set(app_name hello-compute)
 
 add_executable(
     ${app_name} 
