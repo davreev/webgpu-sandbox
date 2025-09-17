@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <cstdint>
+#include <thread>
+#include <type_traits>
 
 #include <GLFW/glfw3.h>
 
@@ -26,6 +28,18 @@ WGPUWaitStatus wait_for_future(
     WGPUInstance instance,
     WGPUFuture future,
     std::uint64_t timeout = ~0);
+
+// TODO(dr): Remove this once waiting on futures is implemented in wgpu-native
+template <typename Condition>
+void wait_for_condition(WGPUInstance const instance, Condition&& cond)
+{
+    static_assert(std::is_invocable_r_v<bool, Condition>);
+    while (!cond())
+    {
+        wgpuInstanceProcessEvents(instance);
+        std::this_thread::yield();
+    }
+}
 
 WGPUAdapter request_adapter(
     WGPUInstance instance,
