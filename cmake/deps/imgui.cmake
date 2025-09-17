@@ -67,13 +67,11 @@ else()
     # Link to native backend if not compiling with Emscripten
     include(deps/glfw)
     include(deps/wgpu-native)
-    # include(deps/wgvk)
     target_link_libraries(
         imgui-wgpu
         PRIVATE
             glfw::glfw
             wgpu-native
-            # wgvk::wgvk
     )
     target_compile_definitions(
         imgui

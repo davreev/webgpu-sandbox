@@ -52,13 +52,11 @@ else()
 
     include(deps/glfw)
     include(deps/wgpu-native)
-    # include(deps/wgvk)
     target_link_libraries(
         wgpu-glfw 
         PUBLIC
             glfw::glfw
             wgpu-native
-            # wgvk::wgvk
     )
 
     if(APPLE)
