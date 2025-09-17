@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cstdint>
 
 #include <GLFW/glfw3.h>
 
@@ -9,19 +10,22 @@
 namespace wgpu::sandbox
 {
 
-void raise_event(char const* name);
-
-void wait_for_event(char const* name);
-
-#ifdef __EMSCRIPTEN__
-void get_canvas_client_size(int& width, int& height);
-#endif
-
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector);
 #else
 WGPUSurface make_surface(WGPUInstance instance, GLFWwindow* window);
 #endif
+
+#ifdef __EMSCRIPTEN__
+void get_canvas_client_size(int& width, int& height);
+void raise_event(char const* name);
+void wait_for_event(char const* name);
+#endif
+
+WGPUWaitStatus wait_for_future(
+    WGPUInstance instance,
+    WGPUFuture future,
+    std::uint64_t timeout = ~0);
 
 WGPUAdapter request_adapter(
     WGPUInstance instance,
@@ -64,4 +68,4 @@ char const* to_string(WGPUPresentMode value);
 
 char const* to_string(WGPUMapAsyncStatus value);
 
-} // namespace wgpu
+} // namespace wgpu::sandbox

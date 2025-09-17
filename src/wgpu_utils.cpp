@@ -14,6 +14,12 @@
 #ifdef __EMSCRIPTEN__
 // clang-format off
 
+EM_JS(void, js_get_canvas_client_size, (int* dst_offset), {
+    const dst = new Int32Array(HEAPU8.buffer, dst_offset, 2);
+    dst[0] = Module.canvas.clientWidth;
+    dst[1] = Module.canvas.clientHeight;
+})
+
 EM_JS(void, js_raise_event, (char const* name), {
     Module.eventTarget.dispatchEvent(new Event(UTF8ToString(name)));
 })
@@ -22,12 +28,6 @@ EM_ASYNC_JS(void, js_wait_for_event, (char const* name), {
     await new Promise((resolve) => {
         Module.eventTarget.addEventListener(UTF8ToString(name), (e) => resolve(e), {once: true});
     });
-})
-
-EM_JS(void, js_get_canvas_client_size, (int* dst_offset), {
-    const dst = new Int32Array(HEAPU8.buffer, dst_offset, 2);
-    dst[0] = Module.canvas.clientWidth;
-    dst[1] = Module.canvas.clientHeight;
 })
 
 // clang-format on
@@ -88,54 +88,7 @@ void report_limits(WGPULimits const& limits)
     fmt::println("\tmaxComputeWorkgroupsPerDimension: {}", limits.maxComputeWorkgroupsPerDimension);
 }
 
-[[maybe_unused]]
-WGPUWaitStatus wait_for_future(
-    WGPUInstance const instance,
-    WGPUFuture const future,
-    std::uint64_t const poll_freq = 200 * 1000)
-{
-    WGPUFutureWaitInfo info = {};
-    info.future = future;
-
-    WGPUWaitStatus status;
-    do
-    {
-        // DEBUG(dr): wgpu-native doesn't implement wgpuInstanceWaitAny
-        // (https://github.com/gfx-rs/wgpu-native/issues/510). Could try polling via
-        // wgpuInstanceProcessEvents instead.
-
-        status = wgpuInstanceWaitAny(instance, 1, &info, poll_freq);
-    } while (status == WGPUWaitStatus_TimedOut);
-
-    return status;
-}
-
 } // namespace
-
-void raise_event([[maybe_unused]] char const* name)
-{
-#ifdef __EMSCRIPTEN__
-    js_raise_event(name);
-#endif
-}
-
-void wait_for_event([[maybe_unused]] char const* name)
-{
-#ifdef __EMSCRIPTEN__
-    js_wait_for_event(name);
-    emscripten_sleep(0);
-#endif
-}
-
-#ifdef __EMSCRIPTEN__
-void get_canvas_client_size(int& width, int& height)
-{
-    int dst[2];
-    js_get_canvas_client_size(dst);
-    width = dst[0];
-    height = dst[1];
-}
-#endif
 
 #ifdef __EMSCRIPTEN__
 WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)
@@ -149,18 +102,52 @@ WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selecto
 
     return wgpuInstanceCreateSurface(instance, &desc);
 }
+
 #else
 WGPUSurface make_surface(WGPUInstance const instance, GLFWwindow* const window)
 {
     return wgpu_make_surface_from_glfw(instance, window);
 }
+
 #endif
+
+#ifdef __EMSCRIPTEN__
+void get_canvas_client_size(int& width, int& height)
+{
+    int dst[2];
+    js_get_canvas_client_size(dst);
+    width = dst[0];
+    height = dst[1];
+}
+
+void raise_event(char const* name) { js_raise_event(name); }
+
+void wait_for_event(char const* name)
+{
+    js_wait_for_event(name);
+    emscripten_sleep(0);
+}
+
+#endif
+
+WGPUWaitStatus wait_for_future(
+    WGPUInstance const instance,
+    WGPUFuture const future,
+    std::uint64_t const timeout)
+{
+    WGPUFutureWaitInfo info = {};
+    info.future = future;
+
+    // NOTE(dr): This function isn't implemented by wgpu-native yet and will panic at runtime
+    // (https://github.com/gfx-rs/wgpu-native/issues/510)
+    return wgpuInstanceWaitAny(instance, 1, &info, timeout);
+}
 
 WGPUAdapter request_adapter(
     WGPUInstance const instance,
     WGPURequestAdapterOptions const* const options)
 {
-    struct Result
+    struct ReqResult
     {
         WGPUAdapter adapter;
     } result{};
@@ -174,25 +161,25 @@ WGPUAdapter request_adapter(
            WGPUStringView message,
            void* userdata1,
            void* /*userdata2*/) {
-            auto resp = static_cast<Result*>(userdata1);
+            auto result = static_cast<ReqResult*>(userdata1);
             if (status == WGPURequestAdapterStatus_Success)
-                resp->adapter = adapter;
+                result->adapter = adapter;
             else
                 fmt::println("Could not get WebGPU adapter. Message: {}", message.data);
-
+#ifdef __EMSCRIPTEN__
             raise_event("wgpuAdapterReady");
+#endif
         };
 
-#if true
-    // NOTE(dr): Request isn't actually async with wgpu-native
-    wgpuInstanceRequestAdapter(instance, options, cb_info);
-    wait_for_event("wgpuAdapterReady");
-
-#else
-    // NOTE(dr): Request must be handled as async with dawn/wgvk
+    [[maybe_unused]]
     WGPUFuture const fut = wgpuInstanceRequestAdapter(instance, options, cb_info);
-    wait_for_future(instance, fut);
 
+    // Wait until async operation is done
+#ifdef __EMSCRIPTEN__
+    wait_for_event("wgpuAdapterReady");
+#else
+    // NOTE(dr): This operation isn't actually async with wgpu-native
+    // wait_for_future(instance, fut);
 #endif
 
     assert(result.adapter);
@@ -200,11 +187,11 @@ WGPUAdapter request_adapter(
 }
 
 WGPUDevice request_device(
-    [[maybe_unused]] WGPUInstance const instance,
+    WGPUInstance const /*instance*/,
     WGPUAdapter const adapter,
     WGPUDeviceDescriptor const* const desc)
 {
-    struct Result
+    struct ReqResult
     {
         WGPUDevice device;
     } result{};
@@ -218,25 +205,25 @@ WGPUDevice request_device(
            WGPUStringView message,
            void* userdata1,
            void* /*userdata2*/) {
-            auto result = static_cast<Result*>(userdata1);
+            auto result = static_cast<ReqResult*>(userdata1);
             if (status == WGPURequestDeviceStatus_Success)
                 result->device = device;
             else
                 fmt::println("Could not get WebGPU device. Message: {}", message.data);
-
+#ifdef __EMSCRIPTEN__
             raise_event("wgpuDeviceReady");
+#endif
         };
 
-#if true
-    // NOTE(dr): Request isn't actually async with wgpu-native
-    wgpuAdapterRequestDevice(adapter, desc, cb_info);
-    wait_for_event("wgpuDeviceReady");
-
-#else
-    // NOTE(dr): Request must be handled as async with dawn/wgvk
+    [[maybe_unused]]
     WGPUFuture const fut = wgpuAdapterRequestDevice(adapter, desc, cb_info);
-    wait_for_future(instance, fut);
 
+    // Wait until async operation is done
+#ifdef __EMSCRIPTEN__
+    wait_for_event("wgpuDeviceReady");
+#else
+    // NOTE(dr): This operation isn't actually async with wgpu-native
+    // wait_for_future(instance, fut);
 #endif
 
     assert(result.device);
@@ -564,4 +551,4 @@ char const* to_string(WGPUMapAsyncStatus value)
     return names[value];
 }
 
-} // namespace wgpu
+} // namespace wgpu::sandbox

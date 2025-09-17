@@ -12,6 +12,15 @@ target_link_libraries(
         wgpu-app
 )
 
+target_compile_options(
+    app-base
+    PUBLIC
+        -Wall 
+        -Wextra 
+        -Wpedantic
+        -Werror
+)
+
 add_subdirectory(buffer-copy)
 add_subdirectory(clear-screen)
 add_subdirectory(hello-imgui)
