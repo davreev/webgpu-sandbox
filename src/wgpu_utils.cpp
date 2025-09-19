@@ -1,36 +1,13 @@
 #include "wgpu_utils.hpp"
 
-#include <cstdint>
-#include <vector>
+#include <cassert>
 
 #include <fmt/core.h>
 
 #ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
+#include "emsc_utils.hpp"
 #else
 #include "wgpu_glfw.h"
-#endif
-
-#ifdef __EMSCRIPTEN__
-// clang-format off
-
-EM_JS(void, js_get_canvas_client_size, (int* dst_offset), {
-    const dst = new Int32Array(HEAPU8.buffer, dst_offset, 2);
-    dst[0] = Module.canvas.clientWidth;
-    dst[1] = Module.canvas.clientHeight;
-})
-
-EM_JS(void, js_raise_event, (char const* name), {
-    Module.eventTarget.dispatchEvent(new Event(UTF8ToString(name)));
-})
-
-EM_ASYNC_JS(void, js_wait_for_event, (char const* name), {
-    await new Promise((resolve) => {
-        Module.eventTarget.addEventListener(UTF8ToString(name), (e) => resolve(e), {once: true});
-    });
-})
-
-// clang-format on
 #endif
 
 namespace wgpu::sandbox
@@ -90,45 +67,21 @@ void report_limits(WGPULimits const& limits)
 
 } // namespace
 
-#ifdef __EMSCRIPTEN__
-WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector)
+WGPUSurface make_surface(WGPUInstance const instance, SurfaceSource const& surface_src)
 {
+#ifdef __EMSCRIPTEN__
     WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvas_desc{};
     canvas_desc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
-    canvas_desc.selector = {canvas_selector, WGPU_STRLEN};
+    canvas_desc.selector = {surface_src.canvas_id, WGPU_STRLEN};
 
     WGPUSurfaceDescriptor desc{};
     desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&canvas_desc);
 
     return wgpuInstanceCreateSurface(instance, &desc);
-}
-
 #else
-WGPUSurface make_surface(WGPUInstance const instance, GLFWwindow* const window)
-{
-    return wgpu_make_surface_from_glfw(instance, window);
-}
-
+    return wgpu_make_surface_from_glfw(instance, surface_src.window);
 #endif
-
-#ifdef __EMSCRIPTEN__
-void get_canvas_client_size(int& width, int& height)
-{
-    int dst[2];
-    js_get_canvas_client_size(dst);
-    width = dst[0];
-    height = dst[1];
 }
-
-void raise_event(char const* name) { js_raise_event(name); }
-
-void wait_for_event(char const* name)
-{
-    js_wait_for_event(name);
-    emscripten_sleep(0);
-}
-
-#endif
 
 WGPUWaitStatus wait_for_future(
     WGPUInstance const instance,
@@ -150,6 +103,7 @@ WGPUAdapter request_adapter(
     struct ReqResult
     {
         WGPUAdapter adapter;
+        bool is_ready;
     } result{};
 
     WGPURequestAdapterCallbackInfo cb_info{};
@@ -168,6 +122,8 @@ WGPUAdapter request_adapter(
                 fmt::println("Could not get WebGPU adapter. Message: {}", message.data);
 #ifdef __EMSCRIPTEN__
             raise_event("wgpuAdapterReady");
+#else
+            result->is_ready = true;
 #endif
         };
 
@@ -178,8 +134,9 @@ WGPUAdapter request_adapter(
 #ifdef __EMSCRIPTEN__
     wait_for_event("wgpuAdapterReady");
 #else
-    // NOTE(dr): This operation isn't actually async with wgpu-native
+    // NOTE(dr): Waiting on futures is not yet implemented in wgpu-native
     // wait_for_future(instance, fut);
+    wait_for_condition(instance, [&]() { return result.is_ready; });
 #endif
 
     assert(result.adapter);
@@ -187,13 +144,14 @@ WGPUAdapter request_adapter(
 }
 
 WGPUDevice request_device(
-    WGPUInstance const /*instance*/,
+    [[maybe_unused]] WGPUInstance const instance,
     WGPUAdapter const adapter,
     WGPUDeviceDescriptor const* const desc)
 {
     struct ReqResult
     {
         WGPUDevice device;
+        bool is_ready;
     } result{};
 
     WGPURequestDeviceCallbackInfo cb_info{};
@@ -212,6 +170,8 @@ WGPUDevice request_device(
                 fmt::println("Could not get WebGPU device. Message: {}", message.data);
 #ifdef __EMSCRIPTEN__
             raise_event("wgpuDeviceReady");
+#else
+            result->is_ready = true;
 #endif
         };
 
@@ -222,8 +182,9 @@ WGPUDevice request_device(
 #ifdef __EMSCRIPTEN__
     wait_for_event("wgpuDeviceReady");
 #else
-    // NOTE(dr): This operation isn't actually async with wgpu-native
+    // NOTE(dr): Waiting on futures is not yet implemented in wgpu-native
     // wait_for_future(instance, fut);
+    wait_for_condition(instance, [&]() { return result.is_ready; });
 #endif
 
     assert(result.device);

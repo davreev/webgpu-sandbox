@@ -3,6 +3,10 @@ add_library(
     wgpu_utils.cpp
 )
 
+if(EMSCRIPTEN)
+    target_sources(wgpu-app PRIVATE emsc_utils.cpp)
+endif()
+
 target_include_directories(
     wgpu-app
     PUBLIC

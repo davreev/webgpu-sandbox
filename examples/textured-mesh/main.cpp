@@ -2,12 +2,11 @@
 
 #include <fmt/core.h>
 
+#include <webgpu/webgpu.h>
+
 #ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #endif
-
-#include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
@@ -18,108 +17,19 @@
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
 
+#include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
 #include "assets.hpp"
 #include "graphics.h"
 
-#include "../dr_shim.hpp"
+#include "../example_base.hpp"
 #include "../gfx_utils.hpp"
 
 namespace wgpu::sandbox
 {
 namespace
 {
-
-struct GpuContext
-{
-    WGPUInstance instance;
-    WGPUSurface surface;
-    WGPUAdapter adapter;
-    WGPUDevice device;
-    WGPUTextureFormat surface_format;
-
-    static GpuContext make(GLFWwindow* const window)
-    {
-        GpuContext result{};
-
-        // Create WebGPU instance
-        result.instance = wgpuCreateInstance(nullptr);
-        assert(result.instance);
-
-#ifdef __EMSCRIPTEN__
-        // Get WebGPU surface from the HTML canvas
-        result.surface = make_surface(result.instance, "#textured-mesh");
-#else
-        // Get WebGPU surface from GLFW window
-        result.surface = make_surface(result.instance, window);
-#endif
-        assert(result.surface);
-
-        // Create WGPU adapter
-        WGPURequestAdapterOptions options{};
-        {
-            options.compatibleSurface = result.surface;
-            options.powerPreference = WGPUPowerPreference_HighPerformance;
-        }
-        result.adapter = request_adapter(result.instance, &options);
-        assert(result.adapter);
-
-        // Provide uncaptured error callback to device creation
-        WGPUDeviceDescriptor device_desc = {};
-        device_desc.uncapturedErrorCallbackInfo.callback = //
-            [](WGPUDevice const* /*device*/,
-               WGPUErrorType type,
-               WGPUStringView msg,
-               void* /*userdata1*/,
-               void* /*userdata2*/) {
-                fmt::print(
-                    "WebGPU device error: {} ({})\nMessage: {}\n",
-                    to_string(type),
-                    int(type),
-                    msg.data);
-            };
-
-        // Create WebGPU device
-        result.device = request_device(result.instance, result.adapter, &device_desc);
-        assert(result.device);
-
-        result.surface_format = WGPUTextureFormat_BGRA8Unorm;
-        result.config_surface(window);
-
-        return result;
-    }
-
-    static void release(GpuContext& ctx)
-    {
-        wgpuSurfaceUnconfigure(ctx.surface);
-        wgpuDeviceRelease(ctx.device);
-        wgpuAdapterRelease(ctx.adapter);
-        wgpuSurfaceRelease(ctx.surface);
-        wgpuInstanceRelease(ctx.instance);
-        ctx = {};
-    }
-
-    void config_surface(int const width, int const height)
-    {
-        WGPUSurfaceConfiguration config{};
-        {
-            config.device = device;
-            config.width = width;
-            config.height = height;
-            config.format = surface_format;
-            config.usage = WGPUTextureUsage_RenderAttachment;
-        }
-        wgpuSurfaceConfigure(surface, &config);
-    }
-
-    void config_surface(GLFWwindow* const window)
-    {
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
-        config_surface(width, height);
-    }
-};
 
 struct RenderPass
 {
@@ -466,8 +376,9 @@ void init_app()
         nullptr);
     assert(state.window);
 
-    // Create WebGPU context
-    state.gpu = GpuContext::make(state.window);
+    // Create WebGPU context and report details
+    state.gpu = GpuContext::make({state.window, "#textured-mesh"});
+    state.gpu.report();
 
     // Create additional render targets
     int fb_size[2];
@@ -498,7 +409,7 @@ void init_app()
 #endif
 
     // Init materials and create instance
-    RenderMaterial::init(state.gpu.device, state.gpu.surface_format);
+    RenderMaterial::init(state.gpu.device, default_surface_format);
     state.material = RenderMaterial::make(state.gpu.device);
 
     // Create mesh

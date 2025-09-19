@@ -1,77 +1,28 @@
 #include <cassert>
 
-#include <fmt/core.h>
+#include <type_traits>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
-#else
-#include <webgpu/wgpu.h>
-#endif
+#include <fmt/core.h>
 
 #include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
 #include <dr/defer.hpp>
+#include <dr/memory.hpp>
+#include <dr/span.hpp>
 
+#include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
-#include "../dr_shim.hpp"
 #include "shader_src.hpp"
 #include "utils.h"
+
+#include "../example_base.hpp"
 
 namespace wgpu::sandbox
 {
 namespace
 {
-
-struct GpuContext
-{
-    WGPUInstance instance;
-    WGPUAdapter adapter;
-    WGPUDevice device;
-
-    static GpuContext make()
-    {
-        GpuContext result{};
-
-        // Create WebGPU instance
-        result.instance = wgpuCreateInstance(nullptr);
-        assert(result.instance);
-
-        // Create WGPU adapter
-        result.adapter = request_adapter(result.instance);
-        assert(result.adapter);
-
-        // Provide uncaptured error callback to device creation
-        WGPUDeviceDescriptor device_desc = {};
-        device_desc.uncapturedErrorCallbackInfo.callback = //
-            [](WGPUDevice const* /*device*/,
-               WGPUErrorType type,
-               WGPUStringView msg,
-               void* /*userdata1*/,
-               void* /*userdata2*/) {
-                fmt::print(
-                    "WebGPU device error: {} ({})\nMessage: {}\n",
-                    to_string(type),
-                    int(type),
-                    msg.data);
-            };
-
-        // Create WebGPU device
-        result.device = request_device(result.instance, result.adapter, &device_desc);
-        assert(result.device);
-
-        return result;
-    }
-
-    static void release(GpuContext& ctx)
-    {
-        wgpuDeviceRelease(ctx.device);
-        wgpuAdapterRelease(ctx.adapter);
-        wgpuInstanceRelease(ctx.instance);
-        ctx = {};
-    }
-};
 
 struct UnaryKernel
 {
@@ -85,9 +36,11 @@ struct UnaryKernel
         UnaryKernel result{};
 
         result.bind_group_layout = unary_kernel_make_bind_group_layout(device);
+        
         result.pipeline_layout = unary_kernel_make_pipeline_layout(
             device,
             result.bind_group_layout);
+
         result.pipeline = unary_kernel_make_pipeline(
             device,
             result.pipeline_layout,
@@ -136,6 +89,63 @@ struct ComputePass
     }
 };
 
+template <typename Action>
+void read_buffer(
+    [[maybe_unused]] WGPUInstance const instance,
+    WGPUBuffer const buffer,
+    Action&& action)
+{
+    static_assert(std::is_invocable_v<Action, Span<u8 const>>);
+
+    struct MapResult
+    {
+        WGPUBuffer buffer;
+        bool is_ready;
+    } result{buffer, false};
+
+    WGPUBufferMapCallbackInfo cb_info{};
+    cb_info.userdata1 = &result;
+    cb_info.userdata2 = &action;
+    cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
+    cb_info.callback = //
+        [](WGPUMapAsyncStatus status, WGPUStringView /*msg*/, void* userdata1, void* userdata2) {
+            auto& result = *static_cast<MapResult*>(userdata1);
+            auto& action = *static_cast<Action*>(userdata2);
+
+            // If map was successful, need to unmap the buffer when we're done here
+            assert(status == WGPUMapAsyncStatus_Success);
+            auto const unmap = defer([&]() { wgpuBufferUnmap(result.buffer); });
+
+            // Perform some action on the buffer contents
+            usize const size = wgpuBufferGetSize(result.buffer);
+            u8 const* bytes = as<u8>(wgpuBufferGetConstMappedRange(result.buffer, 0, size));
+            action(Span(bytes, size));
+
+#ifdef __EMSCRIPTEN__
+            raise_event("resultReady");
+#else
+            result.is_ready = true;
+#endif
+        };
+
+    [[maybe_unused]]
+    WGPUFuture const fut = wgpuBufferMapAsync(
+        result.buffer,
+        WGPUMapMode_Read,
+        0,
+        wgpuBufferGetSize(result.buffer),
+        cb_info);
+
+    // Wait until async work is done
+#ifdef __EMSCRIPTEN__
+    wait_for_event("resultReady");
+#else
+    // NOTE(dr): Waiting on futures is not yet implemented in wgpu-native
+    // wait_for_future(instance, fut);
+    wait_for_condition(instance, [&]() { return result.is_ready; });
+#endif
+}
+
 struct AppState
 {
     GpuContext gpu;
@@ -148,15 +158,15 @@ AppState state{};
 void init_app()
 {
     state.gpu = GpuContext::make();
+    state.gpu.report();
+
     state.kernel = UnaryKernel::make(state.gpu.device, shader_src);
 
     constexpr usize buffer_size = 100 * sizeof(f32);
-
     state.buffers[0] = make_buffer(
         state.gpu.device,
         buffer_size,
         WGPUBufferUsage_CopySrc | WGPUBufferUsage_Storage);
-
     state.buffers[1] = make_buffer(
         state.gpu.device,
         buffer_size,
@@ -224,67 +234,14 @@ int main(int /*argc*/, char** /*argv*/)
         wgpuQueueSubmit(queue, 1, &cmds);
     }
 
-    // Read second buffer back to host asynchronously
-    {
-        struct MapResult
-        {
-            WGPUBuffer buffer;
-            bool is_ready;
-        } result{state.buffers[1], false};
-
-        WGPUBufferMapCallbackInfo cb_info{};
-        cb_info.userdata1 = &result;
-        cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
-        cb_info.callback = //
-            [](WGPUMapAsyncStatus status,
-               WGPUStringView /*msg*/,
-               void* userdata1,
-               void* /*userdata2*/) {
-                assert(status == WGPUMapAsyncStatus_Success);
-                auto result = static_cast<MapResult*>(userdata1);
-
-                // Need to unmap the buffer when we're done
-                auto const unmap = defer([=]() { wgpuBufferUnmap(result->buffer); });
-
-                // Print out the mapped buffer's data
-                {
-                    usize const size = wgpuBufferGetSize(result->buffer);
-                    auto data = static_cast<f32 const*>(
-                        wgpuBufferGetConstMappedRange(result->buffer, 0, size));
-
-                    usize const count = size / sizeof(f32);
-                    assert(count > 0);
-
-                    fmt::print("buffer: [{}", data[0]);
-                    for (usize i = 1; i < count; ++i)
-                        fmt::print(", {}", data[i]);
-                    fmt::print("]\n");
-                }
-
-#ifdef __EMSCRIPTEN__
-                raise_event("resultReady");
-#else
-                result->is_ready = true;
-#endif
-            };
-
-        [[maybe_unused]]
-        WGPUFuture const fut = wgpuBufferMapAsync(
-            result.buffer,
-            WGPUMapMode_Read,
-            0,
-            wgpuBufferGetSize(result.buffer),
-            cb_info);
-
-        // Wait until async work is done
-#ifdef __EMSCRIPTEN__
-        wait_for_event("resultReady");
-#else
-        // NOTE(dr): Waiting on futures is not yet implemented in wgpu-native
-        // wait_for_future(instance, fut);
-        wait_for_condition(state.gpu.instance, [&]() { return result.is_ready; });
-#endif
-    }
+    // Read second buffer back and print out values
+    read_buffer(state.gpu.instance, state.buffers[1], [](Span<u8 const> data) {
+        auto vals = as<f32>(data);
+        fmt::print("buffer: [{}", data[0]);
+        for (f32 const val : vals)
+            fmt::print(", {}", val);
+        fmt::print("]\n");
+    });
 
     return 0;
 }

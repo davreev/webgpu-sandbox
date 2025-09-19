@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cassert>
 #include <cstdint>
 #include <thread>
 #include <type_traits>
@@ -12,17 +11,13 @@
 namespace wgpu::sandbox
 {
 
-#ifdef __EMSCRIPTEN__
-WGPUSurface make_surface(WGPUInstance const instance, char const* canvas_selector);
-#else
-WGPUSurface make_surface(WGPUInstance instance, GLFWwindow* window);
-#endif
+struct SurfaceSource
+{
+    GLFWwindow* window;
+    char const* canvas_id;
+};
 
-#ifdef __EMSCRIPTEN__
-void get_canvas_client_size(int& width, int& height);
-void raise_event(char const* name);
-void wait_for_event(char const* name);
-#endif
+WGPUSurface make_surface(WGPUInstance instance, SurfaceSource const& surface_src);
 
 WGPUWaitStatus wait_for_future(
     WGPUInstance instance,

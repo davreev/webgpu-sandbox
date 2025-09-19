@@ -1,5 +1,6 @@
 add_library(
     app-base STATIC
+    example_base.cpp
     file_utils.cpp
     gfx_utils.cpp
 )

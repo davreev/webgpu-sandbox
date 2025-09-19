@@ -2,115 +2,26 @@
 
 #include <fmt/core.h>
 
+#include <webgpu/webgpu.h>
+
 #ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #endif
-
-#include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
 #include <dr/defer.hpp>
 
+#include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
-#include "../dr_shim.hpp"
 #include "graphics.h"
+
+#include "../example_base.hpp"
 
 namespace wgpu::sandbox
 {
 namespace
 {
-
-struct GpuContext
-{
-    WGPUInstance instance;
-    WGPUSurface surface;
-    WGPUAdapter adapter;
-    WGPUDevice device;
-    WGPUTextureFormat surface_format;
-
-    static GpuContext make(GLFWwindow* const window)
-    {
-        GpuContext result{};
-
-        // Create WebGPU instance
-        result.instance = wgpuCreateInstance(nullptr);
-        assert(result.instance);
-
-#ifdef __EMSCRIPTEN__
-        // Get WebGPU surface from the HTML canvas
-        result.surface = make_surface(result.instance, "#clear-screen");
-#else
-        // Get WebGPU surface from GLFW window
-        result.surface = make_surface(result.instance, window);
-#endif
-        assert(result.surface);
-
-        // Create WGPU adapter
-        WGPURequestAdapterOptions options{};
-        {
-            options.compatibleSurface = result.surface;
-            options.powerPreference = WGPUPowerPreference_HighPerformance;
-        }
-        result.adapter = request_adapter(result.instance, &options);
-        assert(result.adapter);
-
-        // Provide uncaptured error callback to device creation
-        WGPUDeviceDescriptor device_desc = {};
-        device_desc.uncapturedErrorCallbackInfo.callback = //
-            [](WGPUDevice const* /*device*/,
-               WGPUErrorType type,
-               WGPUStringView msg,
-               void* /*userdata1*/,
-               void* /*userdata2*/) {
-                fmt::print(
-                    "WebGPU device error: {} ({})\nMessage: {}\n",
-                    to_string(type),
-                    int(type),
-                    msg.data);
-            };
-
-        // Create WebGPU device
-        result.device = request_device(result.instance, result.adapter, &device_desc);
-        assert(result.device);
-
-        result.surface_format = WGPUTextureFormat_BGRA8Unorm;
-        result.config_surface(window);
-
-        return result;
-    }
-
-    static void release(GpuContext& ctx)
-    {
-        wgpuSurfaceUnconfigure(ctx.surface);
-        wgpuDeviceRelease(ctx.device);
-        wgpuAdapterRelease(ctx.adapter);
-        wgpuSurfaceRelease(ctx.surface);
-        wgpuInstanceRelease(ctx.instance);
-        ctx = {};
-    }
-
-    void config_surface(int const width, int const height)
-    {
-        WGPUSurfaceConfiguration config{};
-        {
-            config.device = device;
-            config.width = width;
-            config.height = height;
-            config.format = surface_format;
-            config.usage = WGPUTextureUsage_RenderAttachment;
-        }
-        wgpuSurfaceConfigure(surface, &config);
-    }
-
-    void config_surface(GLFWwindow* const window)
-    {
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
-        config_surface(width, height);
-    }
-};
 
 struct RenderPass
 {
@@ -173,8 +84,9 @@ void init_app()
         nullptr);
     assert(state.window);
 
-    // Create WebGPU context
-    state.gpu = GpuContext::make(state.window);
+    // Create WebGPU context and report details
+    state.gpu = GpuContext::make({state.window, "#clear-screen"});
+    state.gpu.report();
 
 #ifdef __EMSCRIPTEN__
     // Handle canvas resize
@@ -191,16 +103,6 @@ void init_app()
     glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
         state.gpu.config_surface(width, height);
     });
-#endif
-
-#ifndef __EMSCRIPTEN__
-    // NOTE(dr): Report utils are only compatible with wgpu-native for now
-    report_adapter_features(state.gpu.adapter);
-    report_adapter_limits(state.gpu.adapter);
-    report_adapter_properties(state.gpu.adapter);
-    report_device_features(state.gpu.device);
-    report_device_limits(state.gpu.device);
-    report_surface_capabilities(state.gpu.surface, state.gpu.adapter);
 #endif
 }
 
@@ -255,7 +157,7 @@ int main(int /*argc*/, char** /*argv*/)
         cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
         cb_info.callback =
 #ifdef __EMSCRIPTEN__
-            // NOTE(dr): Callback from webgpu.h in Emdawnwebgpu has additional params
+            // NOTE(dr): Callback from webgpu.h in Emdawnwebgpu has a different signature
             [](WGPUQueueWorkDoneStatus const status,
                WGPUStringView /*msg*/,
                void* /*userdata1*/,
