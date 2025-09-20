@@ -477,7 +477,7 @@ int main(int /*argc*/, char** /*argv*/)
     auto const _ = defer([]() { deinit_app(); });
 
     // Main loop body
-    constexpr auto loop_body = []() {
+    constexpr auto loop_cb = [](void* /*userdata*/) {
         glfwPollEvents();
 
         // Create a command encoder from the device
@@ -523,16 +523,7 @@ int main(int /*argc*/, char** /*argv*/)
         ++state.frame_count;
     };
 
-    // Main loop
-#ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(loop_body, 0, true);
-#else
-    while (!glfwWindowShouldClose(state.window))
-    {
-        loop_body();
-        wgpuSurfacePresent(state.gpu.surface);
-    }
-#endif
+    MainLoop{state.gpu.surface, state.window, loop_cb}.begin();
 
     return 0;
 }

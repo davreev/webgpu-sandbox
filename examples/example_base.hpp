@@ -36,4 +36,15 @@ struct GpuContext
     void report();
 };
 
+struct MainLoop
+{
+    using Callback = void(void* userdata);
+    WGPUSurface surface{};
+    GLFWwindow* window{};
+    Callback* callback{};
+    void* userdata{};
+
+    void begin() const;
+};
+
 } // namespace wgpu::sandbox

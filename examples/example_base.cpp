@@ -4,6 +4,10 @@
 
 #include <fmt/core.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 namespace wgpu::sandbox
 {
 namespace
@@ -137,6 +141,19 @@ void GpuContext::report()
     report_device_features(device);
     report_device_limits(device);
     report_surface_capabilities(surface, adapter);
+}
+
+void MainLoop::begin() const
+{
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop_arg(callback, userdata, 0, true);
+#else
+    while (!glfwWindowShouldClose(window))
+    {
+        callback(userdata);
+        wgpuSurfacePresent(surface);
+    }
+#endif
 }
 
 } // namespace wgpu::sandbox

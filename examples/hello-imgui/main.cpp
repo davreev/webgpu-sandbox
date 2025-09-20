@@ -207,7 +207,7 @@ int main(int /*argc*/, char** /*argv*/)
     auto const _ = defer([]() { deinit_app(); });
 
     // Main loop
-    constexpr auto loop_body = []() {
+    constexpr auto loop_cb = [](void* /*userdata*/) {
         glfwPollEvents();
 
         // NOTE(dr): Use ImGuiIO::WantCapture* flags to determine if input events should be
@@ -249,16 +249,7 @@ int main(int /*argc*/, char** /*argv*/)
         wgpuQueueSubmit(queue, 1, &cmds);
     };
 
-    // Main loop
-#ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(loop_body, 0, true);
-#else
-    while (!glfwWindowShouldClose(state.window))
-    {
-        loop_body();
-        wgpuSurfacePresent(state.gpu.surface);
-    }
-#endif
+    MainLoop{state.gpu.surface, state.window, loop_cb}.begin();
 
     return 0;
 }
