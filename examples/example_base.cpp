@@ -140,7 +140,9 @@ void GpuContext::report()
     report_adapter_properties(adapter);
     report_device_features(device);
     report_device_limits(device);
-    report_surface_capabilities(surface, adapter);
+    
+    if(surface)
+        report_surface_capabilities(surface, adapter);
 }
 
 void MainLoop::begin() const
