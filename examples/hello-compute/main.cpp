@@ -26,24 +26,35 @@ namespace
 
 struct UnaryKernel
 {
-    WGPUBindGroupLayout bind_group_layout;
-    WGPUBindGroup bind_group;
-    WGPUPipelineLayout pipeline_layout;
+    inline static WGPUBindGroupLayout bind_group_layout{};
+    inline static WGPUPipelineLayout pipeline_layout{};
+
     WGPUComputePipeline pipeline;
+    WGPUBindGroup bind_group;
+
+    static void init(WGPUDevice const device)
+    {
+        bind_group_layout = unary_kernel_make_bind_group_layout(device);
+        pipeline_layout = unary_kernel_make_pipeline_layout(device, bind_group_layout);
+    }
+
+    static void deinit()
+    {
+        wgpuPipelineLayoutRelease(pipeline_layout);
+        pipeline_layout = {};
+
+        wgpuBindGroupLayoutRelease(bind_group_layout);
+        bind_group_layout = {};
+    }
 
     static UnaryKernel make(WGPUDevice const device, char const* const shader_src)
     {
         UnaryKernel result{};
 
-        result.bind_group_layout = unary_kernel_make_bind_group_layout(device);
-        
-        result.pipeline_layout = unary_kernel_make_pipeline_layout(
-            device,
-            result.bind_group_layout);
-
+        assert(pipeline_layout);
         result.pipeline = unary_kernel_make_pipeline(
             device,
-            result.pipeline_layout,
+            pipeline_layout,
             {shader_src, WGPU_STRLEN});
 
         return result;
@@ -51,8 +62,11 @@ struct UnaryKernel
 
     static void release(UnaryKernel& kernel)
     {
+        if (kernel.bind_group)
+            wgpuBindGroupRelease(kernel.bind_group);
+
         wgpuComputePipelineRelease(kernel.pipeline);
-        wgpuBindGroupLayoutRelease(kernel.bind_group_layout);
+
         kernel = {};
     }
 
@@ -160,6 +174,7 @@ void init_app()
     state.gpu = GpuContext::make();
     state.gpu.report();
 
+    UnaryKernel::init(state.gpu.device);
     state.kernel = UnaryKernel::make(state.gpu.device, shader_src);
 
     constexpr usize buffer_size = 100 * sizeof(f32);
@@ -178,6 +193,7 @@ void deinit_app()
     wgpuBufferRelease(state.buffers[0]);
     wgpuBufferRelease(state.buffers[1]);
     UnaryKernel::release(state.kernel);
+    UnaryKernel::deinit();
     GpuContext::release(state.gpu);
     state = {};
 }
