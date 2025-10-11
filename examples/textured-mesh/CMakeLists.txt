@@ -3,7 +3,7 @@ set(app_name textured-mesh)
 add_executable(
     ${app_name}
     "assets.cpp"
-    "graphics.c"
+    "config.c"
     "impl.cpp"
     "main.cpp"
 )

@@ -1,7 +1,6 @@
-#include "graphics.h"
+#include "config.h"
 
 #include <assert.h>
-#include <stdbool.h>
 
 WGPUTextureView surface_make_view(WGPUSurface const surface)
 {
@@ -42,21 +41,8 @@ WGPURenderPipeline make_render_pipeline(
     WGPUTextureFormat const color_format)
 {
     // clang-format off
-    WGPUVertexAttribute const vertex_attrs[] = {
-        {
-            .format = WGPUVertexFormat_Float32x2,
-            .offset = 0,
-            .shaderLocation = 0,
-        },
-        {
-            .format = WGPUVertexFormat_Float32x2,
-            .offset = sizeof(float[2]),
-            .shaderLocation = 1,
-        },
-    };
-
     WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(
-        device, 
+        device,
         &(WGPUShaderModuleDescriptor){
             .nextInChain = (WGPUChainedStruct*)&(WGPUShaderSourceWGSL){
                 .chain = {
@@ -72,19 +58,14 @@ WGPURenderPipeline make_render_pipeline(
             .vertex = {
                 .module = shader,
                 .entryPoint = {"vs_main", WGPU_STRLEN},
-                .bufferCount = 1,
-                .buffers = &(WGPUVertexBufferLayout){
-                    .stepMode = WGPUVertexStepMode_Vertex,
-                    .arrayStride = sizeof(float[4]),
-                    .attributeCount = sizeof(vertex_attrs) / sizeof(*vertex_attrs),
-                    .attributes = vertex_attrs,
-                },
             },
             .primitive = {
                 .topology = WGPUPrimitiveTopology_TriangleList,
                 .frontFace = WGPUFrontFace_CCW,
                 .cullMode = WGPUCullMode_None,
             },
+            // .depthStencil = &(WGPUDepthStencilState){
+            // },
             .multisample = {
                 .count = 1,
                 .mask = ~0u,
@@ -96,6 +77,8 @@ WGPURenderPipeline make_render_pipeline(
                 .targetCount = 1,
                 .targets = &(WGPUColorTargetState){
                     .format = color_format,
+                    // .blend = &(WGPUBlendState){
+                    // },
                     .writeMask = WGPUColorWriteMask_All,
                 },
             },
@@ -104,18 +87,4 @@ WGPURenderPipeline make_render_pipeline(
 
     wgpuShaderModuleRelease(shader);
     return result;
-}
-
-WGPUBuffer render_mesh_make_buffer(
-    WGPUDevice const device,
-    size_t const size,
-    WGPUBufferUsage const usage)
-{
-    return wgpuDeviceCreateBuffer(
-        device,
-        &(WGPUBufferDescriptor){
-            .usage = usage,
-            .size = size,
-            .mappedAtCreation = true,
-        });
 }

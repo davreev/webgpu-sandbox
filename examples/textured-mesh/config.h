@@ -1,5 +1,5 @@
-#ifndef GRAPHICS_H
-#define GRAPHICS_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
 #include <webgpu/webgpu.h>
 
@@ -60,4 +60,4 @@ WGPURenderPassEncoder render_pass_begin(
 } // extern "C"
 #endif
 
-#endif // GRAPHICS_H
+#endif // CONFIG_H

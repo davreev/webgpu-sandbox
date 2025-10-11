@@ -17,7 +17,7 @@
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
-#include "graphics.h"
+#include "config.h"
 #include "shader_src.hpp"
 
 #include "../example_base.hpp"

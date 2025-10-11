@@ -21,7 +21,7 @@
 #include <wgpu_utils.hpp>
 
 #include "assets.hpp"
-#include "graphics.h"
+#include "config.h"
 
 #include "../example_base.hpp"
 #include "../gfx_utils.hpp"

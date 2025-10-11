@@ -2,8 +2,8 @@ set(app_name clear-screen)
 
 add_executable(
     ${app_name}
+    config.c
     main.cpp
-    graphics.c
 )
 
 include(deps/dr)

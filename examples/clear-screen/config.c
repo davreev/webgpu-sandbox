@@ -1,4 +1,4 @@
-#include "graphics.h"
+#include "config.h"
 
 #include <assert.h>
 
@@ -18,11 +18,8 @@ WGPUTextureView surface_make_view(WGPUSurface const surface)
 
 WGPURenderPassEncoder render_pass_begin(
     WGPUCommandEncoder const encoder,
-    WGPUTextureView const surface_view,
-    WGPUColor const* clear_color)
+    WGPUTextureView const surface_view)
 {
-    static WGPUColor const default_clear_color = {.r = 0.15, .g = 0.15, .b = 0.15, .a = 1.0};
-
     return wgpuCommandEncoderBeginRenderPass(
         encoder,
         &(WGPURenderPassDescriptor){
@@ -32,7 +29,7 @@ WGPURenderPassEncoder render_pass_begin(
                     .view = surface_view,
                     .loadOp = WGPULoadOp_Clear,
                     .storeOp = WGPUStoreOp_Store,
-                    .clearValue = clear_color ? *clear_color : default_clear_color,
+                    .clearValue = {.r = 1.0, .g = 0.0, .b = 0.5, .a = 1.0},
                     .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
                 },
         });

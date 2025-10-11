@@ -15,7 +15,7 @@
 #include <wgpu_imgui.hpp>
 #include <wgpu_utils.hpp>
 
-#include "graphics.h"
+#include "config.h"
 
 #include "../example_base.hpp"
 

@@ -1,5 +1,5 @@
-#ifndef GRAPHICS_H
-#define GRAPHICS_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
 #include <webgpu/webgpu.h>
 
@@ -17,8 +17,10 @@ WGPURenderPipeline make_render_pipeline(
     WGPUStringView shader_src,
     WGPUTextureFormat color_format);
 
+WGPUBuffer render_mesh_make_buffer(WGPUDevice device, size_t size, WGPUBufferUsage usage);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif // GRAPHICS_H
+#endif // CONFIG_H

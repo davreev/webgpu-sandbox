@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
 #include <webgpu/webgpu.h>
 
@@ -32,4 +32,4 @@ WGPUComputePipeline unary_kernel_make_pipeline(
 } // extern "C"
 #endif
 
-#endif // UTILS_H
+#endif // CONFIG_H

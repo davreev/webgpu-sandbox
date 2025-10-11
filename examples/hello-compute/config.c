@@ -1,4 +1,4 @@
-#include "utils.h"
+#include "config.h"
 
 WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsage const usage)
 {
