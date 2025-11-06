@@ -44,6 +44,7 @@ struct RenderPass
     static void end(RenderPass& pass)
     {
         wgpuRenderPassEncoderEnd(pass.encoder);
+        wgpuRenderPassEncoderRelease(pass.encoder);
         wgpuTextureViewRelease(pass.surface_view);
         pass = {};
     }

@@ -99,6 +99,7 @@ struct ComputePass
     static void end(ComputePass& pass)
     {
         wgpuComputePassEncoderEnd(pass.encoder);
+        wgpuComputePassEncoderRelease(pass.encoder);
         pass = {};
     }
 };
