@@ -22,6 +22,39 @@ function(get_base_dir file result_)
 endfunction()
 
 
+function(convert_shaders_slang_to_wgsl files_out_)
+    find_program(slangc slangc REQUIRED)
+    file(MAKE_DIRECTORY "${gen_dir}/assets/shaders")
+
+    set(files_out ${${files_out_}})
+    foreach(slang_file ${slang_files})
+        get_base_dir(${slang_file} base_dir)
+        file(RELATIVE_PATH rel_path ${base_dir} ${slang_file})
+        cmake_path(REMOVE_EXTENSION rel_path LAST_ONLY)
+
+        set(wgsl_file "${gen_dir}/${rel_path}.wgsl")
+        add_custom_command(
+            OUTPUT
+                ${wgsl_file}
+            DEPENDS 
+                ${slang_file}
+            COMMAND 
+                ${slangc}
+                ${slang_file}
+                -target wgsl
+                # NOTE: -o doesn't work with multiple entry points atm (https://github.com/shader-slang/slang/issues/8111)
+                # -o ${wgsl_file}
+                > ${wgsl_file}
+            COMMENT 
+                "Generating WGSL file"
+        )
+        list(APPEND files_out ${wgsl_file})
+    endforeach()
+
+    set(${files_out_} ${files_out} PARENT_SCOPE)
+endfunction()
+
+
 function(copy_assets)
     set(files_out)
     foreach(file_in ${asset_files})
@@ -112,4 +145,5 @@ endfunction()
 
 
 set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}")
+set(gen_dir "${CMAKE_CURRENT_BINARY_DIR}/gen")
 get_default_runtime_output_dir(runtime_output_dir)
