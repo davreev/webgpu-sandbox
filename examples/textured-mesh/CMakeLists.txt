@@ -8,7 +8,6 @@ add_executable(
     "main.cpp"
 )
 
-include(deps/dr)
 include(deps/stb-image)
 target_link_libraries(
     ${app_name}

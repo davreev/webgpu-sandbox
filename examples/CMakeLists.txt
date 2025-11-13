@@ -1,15 +1,13 @@
 add_library(
     app-base STATIC
     example_base.cpp
-    file_utils.cpp
-    gfx_utils.cpp
 )
 
-include(deps/dr)
+include(deps/dr-app)
 target_link_libraries(
     app-base
     PUBLIC
-        dr::dr
+        dr::app-util
         wgpu-app
 )
 
