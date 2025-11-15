@@ -178,19 +178,6 @@ WGPURenderPipeline render_material_make_pipeline(
                 .format = depth_format,
                 .depthWriteEnabled = true,
                 .depthCompare = WGPUCompareFunction_LessEqual,
-#ifndef __EMSCRIPTEN__
-                // NOTE(dr): As of v0.19.4.1, wgpu-native appears to use WGPUCompareFunction_Never
-                // as the default. This isn't consistent with the WebGPU standard and causes a panic
-                // at runtime. As a workaround, setting the standard-compliant default appears to do
-                // the trick. See related (closed?) issue:
-                // https://github.com/gfx-rs/wgpu-native/issues/40
-                .stencilFront = {
-                    .compare = WGPUCompareFunction_Always,
-                },
-                .stencilBack = {
-                    .compare = WGPUCompareFunction_Always,
-                },
-#endif
             },
             .multisample = {
                 .count = 1,
