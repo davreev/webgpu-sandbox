@@ -17,6 +17,8 @@
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
 
+#include <dr/app/gfx_utils.hpp>
+
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
@@ -24,7 +26,6 @@
 #include "config.h"
 
 #include "../example_base.hpp"
-#include "../gfx_utils.hpp"
 
 namespace wgpu::sandbox
 {

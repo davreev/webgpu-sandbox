@@ -6,7 +6,6 @@ add_executable(
     main.cpp
 )
 
-include(deps/dr)
 target_link_libraries(
     ${app_name}
     PRIVATE

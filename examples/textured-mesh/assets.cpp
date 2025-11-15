@@ -2,9 +2,9 @@
 
 #include <cassert>
 
-#include <stb_image.h>
+#include <dr/app/file_utils.hpp>
 
-#include "../file_utils.hpp"
+#include <stb_image.h>
 
 namespace wgpu::sandbox
 {

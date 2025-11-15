@@ -11,13 +11,14 @@
 #include <dr/basic_types.hpp>
 #include <dr/defer.hpp>
 
+#include <dr/app/file_utils.hpp>
+
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
 #include "config.h"
 
 #include "../example_base.hpp"
-#include "../file_utils.hpp"
 
 namespace wgpu::sandbox
 {
