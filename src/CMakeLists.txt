@@ -47,6 +47,14 @@ if(EMSCRIPTEN)
             "$<$<CONFIG:Debug>:-sASSERTIONS=2>"
             "$<$<CONFIG:Debug>:-gsource-map>"
     )
+
+    # NOTE(dr): Emscripten Clang incorrectly warns on these
+    # (https://github.com/llvm/llvm-project/issues/68933)
+    target_compile_options(
+        wgpu-app
+        PUBLIC
+            -Wno-missing-designated-field-initializers
+    )
 else()
     # Link to native backend if not compiling with Emscripten
     add_library(
