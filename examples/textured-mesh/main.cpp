@@ -23,7 +23,6 @@
 #include <wgpu_utils.hpp>
 
 #include "assets.hpp"
-#include "config.h"
 
 #include "../example_base.hpp"
 
@@ -44,10 +43,10 @@ struct RenderPass
     {
         RenderPass result{};
 
-        result.surface_view = surface_make_view(surface);
+        result.surface_view = make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(cmd_encoder, result.surface_view, depth);
+        result.encoder = begin(cmd_encoder, result.surface_view, depth);
         assert(result.encoder);
 
         return result;
@@ -60,6 +59,50 @@ struct RenderPass
         wgpuTextureViewRelease(pass.surface_view);
         pass = {};
     }
+
+  private:
+    static WGPUTextureView make_view(WGPUSurface const surface)
+    {
+        WGPUSurfaceTexture srf_tex;
+        wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
+        assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal);
+
+        WGPUTextureViewDescriptor const desc{
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+        };
+        return wgpuTextureCreateView(srf_tex.texture, &desc);
+    }
+
+    static WGPURenderPassEncoder begin(
+        WGPUCommandEncoder const encoder,
+        WGPUTextureView const surface_view,
+        WGPUTextureView const depth_view)
+    {
+        WGPURenderPassColorAttachment color_atts[]{
+            {
+                .view = surface_view,
+                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+                .loadOp = WGPULoadOp_Clear,
+                .storeOp = WGPUStoreOp_Store,
+                .clearValue{0.15, 0.15, 0.15, 1.0},
+            },
+        };
+        WGPURenderPassDepthStencilAttachment depth_atts[]{
+            {
+                .view = depth_view,
+                .depthLoadOp = WGPULoadOp_Clear,
+                .depthStoreOp = WGPUStoreOp_Store,
+                .depthClearValue = 1.0f,
+            },
+        };
+        WGPURenderPassDescriptor const desc{
+            .colorAttachmentCount = 1,
+            .colorAttachments = color_atts,
+            .depthStencilAttachment = depth_atts,
+        };
+        return wgpuCommandEncoderBeginRenderPass(encoder, &desc);
+    }
 };
 
 struct DepthTarget
@@ -71,8 +114,8 @@ struct DepthTarget
     static DepthTarget make(WGPUDevice const device, i32 const width, i32 const height)
     {
         DepthTarget result{};
-        result.texture = depth_target_make_texture(device, width, height, format);
-        result.view = depth_target_make_view(result.texture);
+        result.texture = make_texture(device, width, height, format);
+        result.view = make_view(result.texture);
         return result;
     }
 
@@ -87,6 +130,35 @@ struct DepthTarget
     {
         release(*this);
         *this = make(device, width, height);
+    }
+
+  private:
+    static WGPUTexture make_texture(
+        WGPUDevice const device,
+        uint32_t const width,
+        uint32_t const height,
+        WGPUTextureFormat const format)
+    {
+        WGPUTextureDescriptor const desc{
+            .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
+            .dimension = WGPUTextureDimension_2D,
+            .size = {width, height, 1},
+            .format = format,
+            .mipLevelCount = 1,
+            .sampleCount = 1,
+        };
+        return wgpuDeviceCreateTexture(device, &desc);
+    }
+
+    static WGPUTextureView make_view(WGPUTexture const texture)
+    {
+        WGPUTextureViewDescriptor const desc{
+            .format = wgpuTextureGetFormat(texture),
+            .dimension = WGPUTextureViewDimension_2D,
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+        };
+        return wgpuTextureCreateView(texture, &desc);
     }
 };
 
@@ -105,13 +177,13 @@ struct RenderMesh
         RenderMesh result{};
 
         // Create buffers
-        result.vertices = render_mesh_make_buffer(
+        result.vertices = make_buffer(
             device,
             vertex_data.size(),
             WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
         assert(result.vertices);
 
-        result.indices = render_mesh_make_buffer(
+        result.indices = make_buffer(
             device,
             index_data.size(),
             WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
@@ -217,6 +289,20 @@ struct RenderMesh
     {
         wgpuRenderPassEncoderDrawIndexed(encoder, index_count, 1, 0, 0, 0);
     }
+
+  private:
+    static WGPUBuffer make_buffer(
+        WGPUDevice const device,
+        size_t const size,
+        WGPUBufferUsage const usage)
+    {
+        WGPUBufferDescriptor const desc{
+            .usage = usage,
+            .size = size,
+            .mappedAtCreation = true,
+        };
+        return wgpuDeviceCreateBuffer(device, &desc);
+    }
 };
 
 struct RenderMaterial
@@ -240,13 +326,13 @@ struct RenderMaterial
 
     static void init(WGPUDevice const device, WGPUTextureFormat const surface_format)
     {
-        bind_group_layout = render_material_make_bind_group_layout(device);
-        pipeline_layout = render_material_make_pipeline_layout(device, bind_group_layout);
+        bind_group_layout = make_bind_group_layout(device);
+        pipeline_layout = make_pipeline_layout(device, bind_group_layout);
 
         // Init pipeline
         {
             ShaderAsset const& asset = load_shader_asset("assets/shaders/unlit_texture.wgsl");
-            pipeline = render_material_make_pipeline(
+            pipeline = make_pipeline(
                 device,
                 pipeline_layout,
                 {asset.src.c_str(), WGPU_STRLEN},
@@ -258,14 +344,14 @@ struct RenderMaterial
         // Init color map
         {
             ImageAsset const& asset = load_image_asset("assets/images/cube-faces.png");
-            color_map.texture = render_material_make_color_texture(
+            color_map.texture = make_color_texture(
                 device,
                 asset.data.get(),
                 asset.width,
                 asset.height,
                 asset.stride,
-                &color_map.view,
-                &color_map.sampler);
+                color_map.view,
+                color_map.sampler);
             assert(color_map.texture);
             assert(color_map.view);
             assert(color_map.sampler);
@@ -293,7 +379,7 @@ struct RenderMaterial
     {
         RenderMaterial result{};
 
-        result.uniform_buffer = render_material_make_uniform_buffer(device, sizeof(uniforms));
+        result.uniform_buffer = make_uniform_buffer(device, sizeof(uniforms));
         assert(result.uniform_buffer);
 
         result.update_bind_group(device);
@@ -312,7 +398,7 @@ struct RenderMaterial
         if (bind_group)
             wgpuBindGroupRelease(bind_group);
 
-        bind_group = render_material_make_bind_group(
+        bind_group = make_bind_group(
             device,
             bind_group_layout,
             color_map.view,
@@ -334,6 +420,230 @@ struct RenderMaterial
     void bind_resources(WGPURenderPassEncoder const encoder)
     {
         wgpuRenderPassEncoderSetBindGroup(encoder, 0, bind_group, 0, nullptr);
+    }
+
+  private:
+    static WGPUBindGroupLayout make_bind_group_layout(WGPUDevice const device)
+    {
+        WGPUBindGroupLayoutEntry entries[]{
+            {
+                // Texture
+                .binding = 0,
+                .visibility = WGPUShaderStage_Fragment,
+                .texture{
+                    .sampleType = WGPUTextureSampleType_Float,
+                    .viewDimension = WGPUTextureViewDimension_2D,
+                    .multisampled = false,
+                },
+            },
+            {
+                // Sampler
+                .binding = 1,
+                .visibility = WGPUShaderStage_Fragment,
+                .sampler{
+                    .type = WGPUSamplerBindingType_Filtering,
+                },
+            },
+            {
+                // Uniforms
+                .binding = 2,
+                .visibility = WGPUShaderStage_Vertex,
+                .buffer{
+                    .type = WGPUBufferBindingType_Uniform,
+                    .hasDynamicOffset = false,
+                    .minBindingSize = 0,
+                },
+            },
+        };
+        WGPUBindGroupLayoutDescriptor const desc{
+            .entryCount = size(entries),
+            .entries = entries,
+        };
+        return wgpuDeviceCreateBindGroupLayout(device, &desc);
+    }
+
+    static WGPUPipelineLayout make_pipeline_layout(
+        WGPUDevice const device,
+        WGPUBindGroupLayout const bind_group_layout)
+    {
+        WGPUPipelineLayoutDescriptor const desc{
+            .bindGroupLayoutCount = 1,
+            .bindGroupLayouts = &bind_group_layout,
+        };
+        return wgpuDeviceCreatePipelineLayout(device, &desc);
+    }
+
+    static WGPURenderPipeline make_pipeline(
+        WGPUDevice const device,
+        WGPUPipelineLayout const layout,
+        WGPUStringView const shader_src,
+        WGPUTextureFormat const surface_format,
+        WGPUTextureFormat const depth_format)
+    {
+        WGPUShaderSourceWGSL const shader_desc_src{
+            .chain = {.sType = WGPUSType_ShaderSourceWGSL},
+            .code = shader_src,
+        };
+        WGPUShaderModuleDescriptor const shader_desc{
+            .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
+        };
+        WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
+        auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+
+        WGPUVertexAttribute const vert_attrs[]{
+            {
+                .format = WGPUVertexFormat_Float32x3,
+                .offset = 0,
+                .shaderLocation = 0,
+            },
+            {
+                .format = WGPUVertexFormat_Float32x2,
+                .offset = sizeof(float[3]),
+                .shaderLocation = 1,
+            },
+        };
+        WGPUVertexBufferLayout const vert_buf_layout{
+            .stepMode = WGPUVertexStepMode_Vertex,
+            .arrayStride = sizeof(float[5]),
+            .attributeCount = size(vert_attrs),
+            .attributes = vert_attrs,
+        };
+
+        WGPUDepthStencilState const depth_state{
+            .format = depth_format,
+            .depthWriteEnabled = WGPUOptionalBool_True,
+            .depthCompare = WGPUCompareFunction_LessEqual,
+        };
+
+        WGPUColorTargetState const color_targ{
+            .format = surface_format,
+            .writeMask = WGPUColorWriteMask_All,
+        };
+        WGPUFragmentState const frag_state{
+            .module = shader,
+            .entryPoint = {"fs_main", WGPU_STRLEN},
+            .targetCount = 1,
+            .targets = &color_targ,
+        };
+
+        WGPURenderPipelineDescriptor const pipe_desc{
+            .layout = layout,
+            .vertex{
+                .module = shader,
+                .entryPoint = {"vs_main", WGPU_STRLEN},
+                .bufferCount = 1,
+                .buffers = &vert_buf_layout,
+            },
+            .primitive{
+                .topology = WGPUPrimitiveTopology_TriangleList,
+                .frontFace = WGPUFrontFace_CCW,
+                .cullMode = WGPUCullMode_None,
+            },
+            .depthStencil = &depth_state,
+            .multisample{
+                .count = 1,
+                .mask = ~0u,
+                .alphaToCoverageEnabled = 0u,
+            },
+            .fragment = &frag_state,
+        };
+
+        return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
+    }
+
+    static WGPUTexture make_color_texture(
+        WGPUDevice const device,
+        void* const data,
+        uint32_t const width,
+        uint32_t const height,
+        uint32_t const stride,
+        WGPUTextureView& view,
+        WGPUSampler& sampler)
+    {
+        WGPUTextureFormat const format = WGPUTextureFormat_RGBA8Unorm;
+        WGPUExtent3D const size = {width, height, 1};
+        uint32_t const row_size = width * stride;
+        uint32_t const data_size = row_size * height;
+
+        WGPUTextureDescriptor const texture_desc{
+            .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+            .dimension = WGPUTextureDimension_2D,
+            .size = size,
+            .format = format,
+            .mipLevelCount = 1,
+            .sampleCount = 1,
+        };
+        WGPUTexture const texture = wgpuDeviceCreateTexture(device, &texture_desc);
+
+        // Copy image data to mip level 0
+        WGPUTexelCopyTextureInfo const copy_info{
+            .texture = texture,
+        };
+        WGPUTexelCopyBufferLayout const copy_layout{
+            .bytesPerRow = row_size,
+            .rowsPerImage = height,
+        };
+        WGPUQueue const queue = wgpuDeviceGetQueue(device);
+        wgpuQueueWriteTexture(queue, &copy_info, data, data_size, &copy_layout, &size);
+
+        // Create view
+        WGPUTextureViewDescriptor const view_desc{
+            .format = format,
+            .dimension = WGPUTextureViewDimension_2D,
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+        };
+        view = wgpuTextureCreateView(texture, &view_desc);
+
+        // Create sampler
+        WGPUSamplerDescriptor const sampler_desc{
+            .magFilter = WGPUFilterMode_Nearest,
+            .minFilter = WGPUFilterMode_Nearest,
+            .maxAnisotropy = 1,
+        };
+        sampler = wgpuDeviceCreateSampler(device, &sampler_desc);
+
+        return texture;
+    }
+
+    static WGPUBuffer make_uniform_buffer(WGPUDevice const device, size_t const size)
+    {
+        WGPUBufferDescriptor const buf_desc{
+            .usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst,
+            .size = size,
+        };
+        return wgpuDeviceCreateBuffer(device, &buf_desc);
+    }
+
+    static WGPUBindGroup make_bind_group(
+        WGPUDevice const device,
+        WGPUBindGroupLayout const layout,
+        WGPUTextureView const color_view,
+        WGPUSampler const color_sampler,
+        WGPUBuffer const uniforms)
+    {
+        WGPUBindGroupEntry const entries[]{
+            {
+                .binding = 0,
+                .textureView = color_view,
+            },
+            {
+                .binding = 1,
+                .sampler = color_sampler,
+            },
+            {
+                .binding = 2,
+                .buffer = uniforms,
+                .size = wgpuBufferGetSize(uniforms),
+            },
+        };
+
+        WGPUBindGroupDescriptor const bg_desc{
+            .layout = layout,
+            .entryCount = size(entries),
+            .entries = entries,
+        };
+        return wgpuDeviceCreateBindGroup(device, &bg_desc);
     }
 };
 

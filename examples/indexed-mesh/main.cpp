@@ -17,7 +17,6 @@
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
-#include "config.h"
 #include "shader_src.hpp"
 
 #include "../example_base.hpp"
@@ -36,10 +35,10 @@ struct RenderPass
     {
         RenderPass result{};
 
-        result.surface_view = surface_make_view(surface);
+        result.surface_view = make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(cmd_encoder, result.surface_view);
+        result.encoder = begin(cmd_encoder, result.surface_view);
         assert(result.encoder);
 
         return result;
@@ -51,6 +50,40 @@ struct RenderPass
         wgpuRenderPassEncoderRelease(pass.encoder);
         wgpuTextureViewRelease(pass.surface_view);
         pass = {};
+    }
+
+  private:
+    static WGPUTextureView make_view(WGPUSurface const surface)
+    {
+        WGPUSurfaceTexture srf_tex;
+        wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
+        assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal);
+
+        WGPUTextureViewDescriptor const desc{
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+        };
+        return wgpuTextureCreateView(srf_tex.texture, &desc);
+    }
+
+    static WGPURenderPassEncoder begin(
+        WGPUCommandEncoder const encoder,
+        WGPUTextureView const surface_view)
+    {
+        WGPURenderPassColorAttachment color_atts[]{
+            {
+                .view = surface_view,
+                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+                .loadOp = WGPULoadOp_Clear,
+                .storeOp = WGPUStoreOp_Store,
+                .clearValue{0.15, 0.15, 0.15, 1.0},
+            },
+        };
+        WGPURenderPassDescriptor const desc{
+            .colorAttachmentCount = 1,
+            .colorAttachments = color_atts,
+        };
+        return wgpuCommandEncoderBeginRenderPass(encoder, &desc);
     }
 };
 
@@ -69,13 +102,13 @@ struct RenderMesh
         RenderMesh result{};
 
         // Create buffers
-        result.vertices = render_mesh_make_buffer(
+        result.vertices = make_buffer(
             device,
             vertex_data.size(),
             WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst);
         assert(result.vertices);
 
-        result.indices = render_mesh_make_buffer(
+        result.indices = make_buffer(
             device,
             index_data.size(),
             WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
@@ -141,6 +174,20 @@ struct RenderMesh
     {
         wgpuRenderPassEncoderDrawIndexed(encoder, index_count, 1, 0, 0, 0);
     }
+
+  private:
+    static WGPUBuffer make_buffer(
+        WGPUDevice const device,
+        size_t const size,
+        WGPUBufferUsage const usage)
+    {
+        WGPUBufferDescriptor const desc{
+            .usage = usage,
+            .size = size,
+            .mappedAtCreation = true,
+        };
+        return wgpuDeviceCreateBuffer(device, &desc);
+    }
 };
 
 struct AppState
@@ -152,6 +199,73 @@ struct AppState
 };
 
 AppState state{};
+
+WGPURenderPipeline make_render_pipeline(
+    WGPUDevice const device,
+    WGPUStringView const shader_src,
+    WGPUTextureFormat const color_format)
+{
+    WGPUShaderSourceWGSL const shader_desc_src{
+        .chain = {.sType = WGPUSType_ShaderSourceWGSL},
+        .code = shader_src,
+    };
+    WGPUShaderModuleDescriptor const shader_desc{
+        .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
+    };
+    WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
+    auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+
+    WGPUVertexAttribute const vert_attrs[]{
+        {
+            .format = WGPUVertexFormat_Float32x2,
+            .offset = 0,
+            .shaderLocation = 0,
+        },
+        {
+            .format = WGPUVertexFormat_Float32x2,
+            .offset = sizeof(float[2]),
+            .shaderLocation = 1,
+        },
+    };
+    WGPUVertexBufferLayout const vert_buf_layout{
+        .stepMode = WGPUVertexStepMode_Vertex,
+        .arrayStride = sizeof(float[4]),
+        .attributeCount = size(vert_attrs),
+        .attributes = vert_attrs,
+    };
+
+    WGPUColorTargetState const color_targ{
+        .format = color_format,
+        .writeMask = WGPUColorWriteMask_All,
+    };
+    WGPUFragmentState const frag_state{
+        .module = shader,
+        .entryPoint = {"fs_main", WGPU_STRLEN},
+        .targetCount = 1,
+        .targets = &color_targ,
+    };
+    WGPURenderPipelineDescriptor const pipe_desc{
+        .vertex{
+            .module = shader,
+            .entryPoint{"vs_main", WGPU_STRLEN},
+            .bufferCount = 1,
+            .buffers = &vert_buf_layout,
+        },
+        .primitive{
+            .topology = WGPUPrimitiveTopology_TriangleList,
+            .frontFace = WGPUFrontFace_CCW,
+            .cullMode = WGPUCullMode_None,
+        },
+        .multisample{
+            .count = 1,
+            .mask = ~0u,
+            .alphaToCoverageEnabled = 0u,
+        },
+        .fragment = &frag_state,
+    };
+
+    return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
+}
 
 void init_app()
 {

@@ -28,6 +28,17 @@ target_compile_options(
         -Wall -Wextra -Wpedantic -Werror
 )
 
+# NOTE: Disabling these to make C++20 designated initializers actually useful
+target_compile_options(
+    wgpu-app
+    PUBLIC
+        # For Clang > 18
+        -Wno-missing-designated-field-initializers
+        # For GCC and Clang <= 18
+        -Wno-missing-field-initializers
+        -Wno-unknown-warning-option
+)
+
 if(EMSCRIPTEN)
     # NOTE(dr): Using Emdawnwebgpu for Emscripten builds as its webgpu.h is more up to date
     include(deps/emdawnwebgpu)
@@ -46,14 +57,6 @@ if(EMSCRIPTEN)
             "-sASYNCIFY"
             "$<$<CONFIG:Debug>:-sASSERTIONS=2>"
             "$<$<CONFIG:Debug>:-gsource-map>"
-    )
-
-    # NOTE(dr): Emscripten Clang incorrectly warns on these
-    # (https://github.com/llvm/llvm-project/issues/68933)
-    target_compile_options(
-        wgpu-app
-        PUBLIC
-            -Wno-missing-designated-field-initializers
     )
 else()
     # Link to native backend if not compiling with Emscripten

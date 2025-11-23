@@ -2,7 +2,6 @@ set(app_name indexed-mesh)
 
 add_executable(
     ${app_name}
-    config.c
     main.cpp
 )
 

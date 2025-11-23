@@ -2,7 +2,6 @@ set(app_name hello-imgui)
 
 add_executable(
     ${app_name}
-    config.c
     main.cpp
 )
 

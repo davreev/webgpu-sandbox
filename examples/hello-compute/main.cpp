@@ -14,7 +14,6 @@
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
-#include "config.h"
 #include "shader_src.hpp"
 
 #include "../example_base.hpp"
@@ -34,8 +33,8 @@ struct UnaryKernel
 
     static void init(WGPUDevice const device)
     {
-        bind_group_layout = unary_kernel_make_bind_group_layout(device);
-        pipeline_layout = unary_kernel_make_pipeline_layout(device, bind_group_layout);
+        bind_group_layout = make_bind_group_layout(device);
+        pipeline_layout = make_pipeline_layout(device, bind_group_layout);
     }
 
     static void deinit()
@@ -52,10 +51,7 @@ struct UnaryKernel
         UnaryKernel result{};
 
         assert(pipeline_layout);
-        result.pipeline = unary_kernel_make_pipeline(
-            device,
-            pipeline_layout,
-            {shader_src, WGPU_STRLEN});
+        result.pipeline = make_pipeline(device, pipeline_layout, {shader_src, WGPU_STRLEN});
 
         return result;
     }
@@ -75,7 +71,7 @@ struct UnaryKernel
         if (bind_group)
             wgpuBindGroupRelease(bind_group);
 
-        bind_group = unary_kernel_make_bind_group(device, bind_group_layout, buffer);
+        bind_group = make_bind_group(device, bind_group_layout, buffer);
         assert(bind_group);
     }
 
@@ -85,6 +81,79 @@ struct UnaryKernel
         wgpuComputePassEncoderSetBindGroup(encoder, 0, bind_group, 0, nullptr);
         wgpuComputePassEncoderDispatchWorkgroups(encoder, 32, 1, 1);
     }
+
+  private:
+    static WGPUBindGroupLayout make_bind_group_layout(WGPUDevice const device)
+    {
+        WGPUBindGroupLayoutEntry const entries[]{
+            {
+                .binding = 0,
+                .visibility = WGPUShaderStage_Compute,
+                .buffer{.type = WGPUBufferBindingType_Storage},
+            },
+        };
+        WGPUBindGroupLayoutDescriptor const desc{
+            .entryCount = sizeof(entries) / sizeof(*entries),
+            .entries = entries,
+        };
+        return wgpuDeviceCreateBindGroupLayout(device, &desc);
+    }
+
+    static WGPUPipelineLayout make_pipeline_layout(
+        WGPUDevice const device,
+        WGPUBindGroupLayout const bind_layout)
+    {
+        WGPUPipelineLayoutDescriptor const desc{
+            .bindGroupLayoutCount = 1,
+            .bindGroupLayouts = &bind_layout,
+        };
+        return wgpuDeviceCreatePipelineLayout(device, &desc);
+    }
+
+    static WGPUComputePipeline make_pipeline(
+        WGPUDevice const device,
+        WGPUPipelineLayout const layout,
+        WGPUStringView const shader_src)
+    {
+        WGPUShaderSourceWGSL shader_desc_src{
+            .chain{.sType = WGPUSType_ShaderSourceWGSL},
+            .code = shader_src,
+        };
+        WGPUShaderModuleDescriptor const shader_desc{
+            .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
+        };
+        WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
+        auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+
+        WGPUComputePipelineDescriptor const pipe_desc{
+            .layout = layout,
+            .compute{
+                .module = shader,
+                .entryPoint{"compute_main", WGPU_STRLEN},
+            },
+        };
+        return wgpuDeviceCreateComputePipeline(device, &pipe_desc);
+    }
+
+    static WGPUBindGroup make_bind_group(
+        WGPUDevice const device,
+        WGPUBindGroupLayout const layout,
+        WGPUBuffer const buffer)
+    {
+        WGPUBindGroupEntry const entries[]{
+            {
+                .binding = 0,
+                .buffer = buffer,
+                .size = wgpuBufferGetSize(buffer),
+            },
+        };
+        WGPUBindGroupDescriptor const desc{
+            .layout = layout,
+            .entryCount = 1,
+            .entries = entries,
+        };
+        return wgpuDeviceCreateBindGroup(device, &desc);
+    }
 };
 
 struct ComputePass
@@ -93,7 +162,7 @@ struct ComputePass
 
     static ComputePass begin(WGPUCommandEncoder const cmd_encoder)
     {
-        return {compute_pass_begin(cmd_encoder)};
+        return {wgpuCommandEncoderBeginComputePass(cmd_encoder, nullptr)};
     }
 
     static void end(ComputePass& pass)
@@ -169,6 +238,15 @@ struct AppState
 };
 
 AppState state{};
+
+WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsage const usage)
+{
+    WGPUBufferDescriptor const desc = {
+        .usage = usage,
+        .size = size,
+    };
+    return wgpuDeviceCreateBuffer(device, &desc);
+}
 
 void init_app()
 {

@@ -14,8 +14,6 @@
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
 
-#include "config.h"
-
 #include "../example_base.hpp"
 
 namespace wgpu::sandbox
@@ -32,10 +30,10 @@ struct RenderPass
     {
         RenderPass result{};
 
-        result.surface_view = surface_make_view(surface);
+        result.surface_view = make_view(surface);
         assert(result.surface_view);
 
-        result.encoder = render_pass_begin(cmd_encoder, result.surface_view);
+        result.encoder = begin(cmd_encoder, result.surface_view);
         assert(result.encoder);
 
         return result;
@@ -47,6 +45,40 @@ struct RenderPass
         wgpuRenderPassEncoderRelease(pass.encoder);
         wgpuTextureViewRelease(pass.surface_view);
         pass = {};
+    }
+
+  private:
+    static WGPUTextureView make_view(WGPUSurface const surface)
+    {
+        WGPUSurfaceTexture srf_tex;
+        wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
+        assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal);
+
+        WGPUTextureViewDescriptor const desc{
+            .mipLevelCount = 1,
+            .arrayLayerCount = 1,
+        };
+        return wgpuTextureCreateView(srf_tex.texture, &desc);
+    }
+
+    static WGPURenderPassEncoder begin(
+        WGPUCommandEncoder const encoder,
+        WGPUTextureView const surface_view)
+    {
+        WGPURenderPassColorAttachment color_atts[]{
+            {
+                .view = surface_view,
+                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+                .loadOp = WGPULoadOp_Clear,
+                .storeOp = WGPUStoreOp_Store,
+                .clearValue{1.0, 0.0, 0.5, 1.0},
+            },
+        };
+        WGPURenderPassDescriptor const desc{
+            .colorAttachmentCount = 1,
+            .colorAttachments = color_atts,
+        };
+        return wgpuCommandEncoderBeginRenderPass(encoder, &desc);
     }
 };
 

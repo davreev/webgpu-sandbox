@@ -8,7 +8,6 @@ endif()
 
 add_executable(
     ${app_name}
-    config.c
     main.cpp
 )
 

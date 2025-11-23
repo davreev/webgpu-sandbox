@@ -2,7 +2,6 @@ set(app_name "hello-triangle")
 
 add_executable(
     ${app_name}
-    config.c
     main.cpp
 )
 
