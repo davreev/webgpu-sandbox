@@ -17,7 +17,7 @@ struct VertexOut {
 [shader("vertex")]
 VertexOut vs_main(int vi: SV_VertexID) {
     let v = tri_verts[vi];
-    return { { v.position, 0.0, 1.0 }, { v.color } };
+    return { { v.position, 0.0, 1.0 }, v.color };
 }
 
 [shader("fragment")]

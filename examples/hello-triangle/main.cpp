@@ -12,10 +12,10 @@
 #include <dr/defer.hpp>
 #include <dr/memory.hpp>
 
+#include <dr/app/file_utils.hpp>
+
 #include <emsc_utils.hpp>
 #include <wgpu_utils.hpp>
-
-#include "shader_src.hpp"
 
 #include "../example_base.hpp"
 
@@ -191,10 +191,14 @@ void init_app()
     });
 #endif
 
+    String buffer;
+    bool const ok = read_text_file("assets/shaders/triangle.wgsl", buffer);
+    assert(ok);
+
     // Create render pipeline
     state.pipeline = make_render_pipeline(
         state.gpu.device,
-        {shader_src, WGPU_STRLEN},
+        {buffer.c_str(), WGPU_STRLEN},
         default_surface_format);
 }
 
