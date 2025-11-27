@@ -47,4 +47,15 @@ struct MainLoop
     void begin() const;
 };
 
+struct Gui
+{
+    static void init(GLFWwindow* window, GpuContext const& ctx);
+    static void deinit();
+
+    static void begin_frame();
+    static void end_frame();
+    
+    static void dispatch_draw(WGPURenderPassEncoder const encoder);
+};
+
 } // namespace wgpu::sandbox

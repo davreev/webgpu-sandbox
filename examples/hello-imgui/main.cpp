@@ -87,49 +87,6 @@ struct RenderPass
     }
 };
 
-struct UI
-{
-    static void init(GLFWwindow* window, GpuContext const& gpu)
-    {
-        ImGui::CreateContext();
-
-        ImGuiIO& io = ImGui::GetIO();
-        {
-            io.IniFilename = nullptr;
-            io.LogFilename = nullptr;
-            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-            // ...
-        }
-
-        ImGui::StyleColorsDark();
-
-        // Init GLFW impl
-        ImGui_ImplGlfw_InitForOther(window, true);
-
-        // Init WebGPU impl
-        ImGui_ImplWGPU_InitInfo config{};
-        {
-            config.Device = gpu.device;
-            config.NumFramesInFlight = 3;
-            config.RenderTargetFormat = default_surface_format;
-            config.DepthStencilFormat = WGPUTextureFormat_Undefined;
-        }
-        ImGui_ImplWGPU_Init(&config);
-    }
-
-    static void deinit()
-    {
-        ImGui_ImplWGPU_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-    }
-
-    static void dispatch_draw(WGPURenderPassEncoder const encoder)
-    {
-        ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), encoder);
-    }
-};
-
 struct AppState
 {
     GLFWwindow* window;
@@ -186,12 +143,12 @@ void init_app()
     });
 #endif
 
-    UI::init(state.window, state.gpu);
+    Gui::init(state.window, state.gpu);
 }
 
 void deinit_app()
 {
-    UI::deinit();
+    Gui::deinit();
     GpuContext::release(state.gpu);
     glfwDestroyWindow(state.window);
     glfwTerminate();
@@ -200,9 +157,7 @@ void deinit_app()
 
 void draw_ui()
 {
-    ImGui_ImplWGPU_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+    Gui::begin_frame();
 
     ImGui::SetNextWindowPos({10.0f, 10.0f}, ImGuiCond_FirstUseEver);
     constexpr int window_flags = ImGuiWindowFlags_AlwaysAutoResize;
@@ -227,7 +182,8 @@ void draw_ui()
     }
 
     ImGui::End();
-    ImGui::Render();
+
+    Gui::end_frame();
 }
 
 } // namespace
@@ -270,7 +226,7 @@ int main(int /*argc*/, char** /*argv*/)
             auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
             // Issue UI draw command
-            UI::dispatch_draw(pass.encoder);
+            Gui::dispatch_draw(pass.encoder);
         }
 
         // Create encoded commands

@@ -8,6 +8,8 @@
 #include <emscripten/emscripten.h>
 #endif
 
+#include <wgpu_imgui.hpp>
+
 namespace wgpu::sandbox
 {
 namespace
@@ -140,8 +142,8 @@ void GpuContext::report()
     report_adapter_properties(adapter);
     report_device_features(device);
     report_device_limits(device);
-    
-    if(surface)
+
+    if (surface)
         report_surface_capabilities(surface, adapter);
 }
 
@@ -156,6 +158,55 @@ void MainLoop::begin() const
         wgpuSurfacePresent(surface);
     }
 #endif
+}
+
+void Gui::init(GLFWwindow* window, GpuContext const& ctx)
+{
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    {
+        io.IniFilename = nullptr;
+        io.LogFilename = nullptr;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        // ...
+    }
+
+    ImGui::StyleColorsDark();
+
+    // Init GLFW impl
+    ImGui_ImplGlfw_InitForOther(window, true);
+
+    // Init WebGPU impl
+    ImGui_ImplWGPU_InitInfo config{};
+    {
+        config.Device = ctx.device;
+        config.NumFramesInFlight = 3;
+        config.RenderTargetFormat = default_surface_format;
+        config.DepthStencilFormat = WGPUTextureFormat_Undefined;
+    }
+    ImGui_ImplWGPU_Init(&config);
+}
+
+void Gui::deinit()
+{
+    ImGui_ImplWGPU_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void Gui::begin_frame()
+{
+    ImGui_ImplWGPU_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Gui::end_frame() { ImGui::Render(); }
+
+void Gui::dispatch_draw(WGPURenderPassEncoder const encoder)
+{
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), encoder);
 }
 
 } // namespace wgpu::sandbox
