@@ -480,7 +480,7 @@ struct RenderMaterial
         WGPUTextureFormat const surface_format,
         WGPUTextureFormat const depth_format)
     {
-        WGPUShaderSourceWGSL const shader_desc_src{
+        WGPUShaderSourceWGSL shader_desc_src{
             .chain = {.sType = WGPUSType_ShaderSourceWGSL},
             .code = shader_src,
         };

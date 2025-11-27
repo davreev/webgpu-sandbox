@@ -99,7 +99,7 @@ WGPURenderPipeline make_render_pipeline(
     WGPUStringView const shader_src,
     WGPUTextureFormat const color_format)
 {
-    WGPUShaderSourceWGSL const shader_desc_src{
+    WGPUShaderSourceWGSL shader_desc_src{
         .chain = {.sType = WGPUSType_ShaderSourceWGSL},
         .code = shader_src,
     };
