@@ -33,10 +33,28 @@ include(app-utils)
 
 set(
     asset_files
-    "${src_dir}/assets/shaders/unlit_texture.wgsl"
     "${src_dir}/assets/images/cube-faces.png"
     # ...
 )
+
+if(EXAMPLES_USE_SLANG)
+    set(
+        slang_files
+        "${src_dir}/assets/shaders/unlit_texture.slang"
+        # ...
+    )
+    set(wgsl_files)
+    convert_shaders_slang_to_wgsl(wgsl_files)
+
+    list(APPEND asset_files "${wgsl_files}")
+else()
+    set(
+        wgsl_files
+        "${src_dir}/assets/shaders/unlit_texture.wgsl"
+        # ...
+    )
+    list(APPEND asset_files "${wgsl_files}")
+endif()
 
 if(EMSCRIPTEN)
     set(
