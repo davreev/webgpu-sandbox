@@ -5,8 +5,7 @@ Experimenting with WebGPU as a cross-platform graphics API via
 
 ## Build
 
-This project can be built to run natively or in a web browser. Build instructions vary slightly
-between the two targets.
+This project can be built to run natively or in a web browser.
 
 ### Native Build
 
@@ -23,7 +22,7 @@ cmake --build ./build [--config <config>] [--target <target-name>]
 ### Web Build
 
 Download the [Emscripten SDK](https://github.com/emscripten-core/emsdk) and dot source the
-provided script to initialized the Emscripten toolchain
+provided script to initialize the Emscripten toolchain
 
 ```sh
 # Bash
