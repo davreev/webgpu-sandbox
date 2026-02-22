@@ -7,16 +7,14 @@
 #include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
+#include <dr/container_utils.hpp>
 #include <dr/defer.hpp>
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
 
-#include <emsc_utils.hpp>
-#include <wgpu_utils.hpp>
-
 #include "shader_src.hpp"
 
-#include "../example_base.hpp"
+#include "../gpu_context.hpp"
 
 namespace wgpu::sandbox
 {
@@ -93,7 +91,7 @@ struct UnaryKernel
             },
         };
         WGPUBindGroupLayoutDescriptor const desc{
-            .entryCount = sizeof(entries) / sizeof(*entries),
+            .entryCount = size(entries),
             .entries = entries,
         };
         return wgpuDeviceCreateBindGroupLayout(device, &desc);
@@ -230,14 +228,12 @@ void read_buffer(
 #endif
 }
 
-struct AppState
+struct
 {
     GpuContext gpu;
     UnaryKernel kernel;
-    WGPUBuffer buffers[2];
-};
-
-AppState state{};
+    WGPUBuffer buffers[2]{};
+} state;
 
 WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsage const usage)
 {
@@ -248,7 +244,7 @@ WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsa
     return wgpuDeviceCreateBuffer(device, &desc);
 }
 
-void init_app()
+void init()
 {
     state.gpu = GpuContext::make();
     state.gpu.report();
@@ -267,7 +263,7 @@ void init_app()
         WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead);
 }
 
-void deinit_app()
+void deinit()
 {
     wgpuBufferRelease(state.buffers[0]);
     wgpuBufferRelease(state.buffers[1]);
@@ -284,8 +280,8 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    init_app();
-    auto const _ = defer([]() { deinit_app(); });
+    init();
+    auto const _ = defer([]() { deinit(); });
 
     state.kernel.update_bind_group(state.gpu.device, state.buffers[0]);
 

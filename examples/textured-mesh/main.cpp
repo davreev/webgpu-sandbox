@@ -4,10 +4,6 @@
 
 #include <webgpu/webgpu.h>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten/html5.h>
-#endif
-
 #include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
 #include <dr/defer.hpp>
@@ -19,17 +15,16 @@
 
 #include <dr/app/gfx_utils.hpp>
 
-#include <emsc_utils.hpp>
-#include <wgpu_utils.hpp>
-
 #include "assets.hpp"
 
-#include "../example_base.hpp"
+#include "../example_app.hpp"
 
 namespace wgpu::sandbox
 {
 namespace
 {
+
+using App = ExampleApp;
 
 struct RenderPass
 {
@@ -647,10 +642,8 @@ struct RenderMaterial
     }
 };
 
-struct AppState
+struct
 {
-    GLFWwindow* window;
-    GpuContext gpu;
     DepthTarget depth;
     RenderMaterial material;
     RenderMesh geometry;
@@ -660,89 +653,35 @@ struct AppState
         f32 clip_near{0.01f};
         f32 clip_far{100.0f};
     } view;
-    usize frame_count;
-};
+} state;
 
-AppState state{};
-
-void init_app()
+void init()
 {
-    // Initialize GLFW
-    bool const glfw_ok = glfwInit();
-    assert(glfw_ok);
-
-    // Create GLFW window
-#ifdef __EMSCRIPTEN__
-    int init_width, init_height;
-    get_canvas_client_size(init_width, init_height);
-#else
-    constexpr int init_width = 800;
-    constexpr int init_height = 600;
-#endif
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    state.window = glfwCreateWindow(
-        init_width,
-        init_height,
-        "WebGPU Sandbox: Textured Mesh",
-        nullptr,
-        nullptr);
-    assert(state.window);
-
-    // Create WebGPU context and report details
-    state.gpu = GpuContext::make({state.window, "#textured-mesh"});
-    state.gpu.report();
-
     // Create additional render targets
-    int fb_size[2];
-    glfwGetFramebufferSize(state.window, fb_size, fb_size + 1);
-    state.depth = DepthTarget::make(state.gpu.device, fb_size[0], fb_size[1]);
-
-#ifdef __EMSCRIPTEN__
-    // Handle canvas resize
-    auto constexpr resize_cb =
-        [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
-        int w, h;
-        get_canvas_client_size(w, h);
-        glfwSetWindowSize(state.window, w, h);
-        return true;
-    };
-    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, resize_cb);
-
-    // Handle framebuffer resize
-    glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
-        state.depth.resize(state.gpu.device, width, height);
-    });
-#else
-    // Handle framebuffer resize
-    glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
-        state.gpu.config_surface(width, height);
-        state.depth.resize(state.gpu.device, width, height);
-    });
-#endif
+    int fb_width, fb_height;
+    glfwGetFramebufferSize(App::window(), &fb_width, &fb_height);
+    state.depth = DepthTarget::make(App::gpu().device, fb_width, fb_height);
 
     // Init materials and create instance
-    RenderMaterial::init(state.gpu.device, default_surface_format);
-    state.material = RenderMaterial::make(state.gpu.device);
+    RenderMaterial::init(App::gpu().device, default_surface_format);
+    state.material = RenderMaterial::make(App::gpu().device);
 
     // Create mesh
-    state.geometry = RenderMesh::make_box(state.gpu.device);
+    state.geometry = RenderMesh::make_box(App::gpu().device);
 }
 
-void deinit_app()
+void deinit()
 {
     RenderMesh::release(state.geometry);
     RenderMaterial::release(state.material);
     DepthTarget::release(state.depth);
-    GpuContext::release(state.gpu);
-    glfwDestroyWindow(state.window);
-    glfwTerminate();
     state = {};
 }
 
 f32 get_window_aspect()
 {
     int w, h;
-    glfwGetWindowSize(state.window, &w, &h);
+    glfwGetWindowSize(App::window(), &w, &h);
     return static_cast<f32>(w) / h;
 }
 
@@ -750,7 +689,7 @@ Mat4<f32> make_local_to_world()
 {
     constexpr f64 turns_per_frame = pi<f64> * 0.004;
     Mat3<f32> r = Mat3<f32>::Identity();
-    r.topLeftCorner<2, 2>() = make_rotate(state.frame_count * turns_per_frame);
+    r.topLeftCorner<2, 2>() = make_rotate(App::frame_count() * turns_per_frame);
     return make_affine(r, r * vec<3>(-0.5f));
 }
 
@@ -758,7 +697,7 @@ Vec3<f32> get_camera_position()
 {
     constexpr f64 cycles_per_frame = 0.002;
     constexpr f64 spread = 0.3 * pi<f64>;
-    f32 const t = spread * std::sin(state.frame_count * (cycles_per_frame * 2.0 * pi<f64>));
+    f32 const t = spread * std::sin(App::frame_count() * (cycles_per_frame * 2.0 * pi<f64>));
 
     constexpr f32 rad = 3.0f;
     return {0.0, rad * std::cos(t), rad * std::sin(t)};
@@ -778,6 +717,59 @@ Mat4<f32> make_view_to_clip()
         state.view.clip_far);
 }
 
+void update()
+{
+    // Create a command encoder from the device
+    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
+        App::gpu().device,
+        nullptr);
+    assert(cmd_encoder);
+    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
+
+    WGPUQueue const queue = wgpuDeviceGetQueue(App::gpu().device);
+
+    // Render pass
+    {
+        RenderPass pass = RenderPass::begin(cmd_encoder, App::gpu().surface, state.depth.view);
+        auto const end_pass = defer([&]() { RenderPass::end(pass); });
+
+        auto& mat = state.material;
+        mat.apply_pipeline(pass.encoder);
+
+        Mat4<f32> const local_to_world = make_local_to_world();
+        Mat4<f32> const world_to_view = make_world_to_view();
+        Mat4<f32> const view_to_clip = make_view_to_clip();
+
+        as_mat<4, 4>(mat.uniforms.local_to_clip) = //
+            view_to_clip * world_to_view * local_to_world;
+
+        mat.update_uniform_buffer(queue);
+        mat.bind_resources(pass.encoder);
+
+        auto& geom = state.geometry;
+        geom.bind_resources(pass.encoder);
+        geom.dispatch_draw(pass.encoder);
+    }
+
+    // Create encoded commands
+    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    assert(cmds);
+    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
+
+    // Submit encoded commands
+    wgpuQueueSubmit(queue, 1, &cmds);
+}
+
+void handle_event(App::Event const& e)
+{
+    // Resize depth buffer
+    if (e.type == App::Event::Type::FramebufferResize)
+    {
+        auto const [w, h] = e.framebuffer_resize;
+        state.depth.resize(App::gpu().device, w, h);
+    }
+}
+
 } // namespace
 } // namespace wgpu::sandbox
 
@@ -785,57 +777,20 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    init_app();
-    auto const _ = defer([]() { deinit_app(); });
-
-    // Main loop body
-    constexpr auto loop_cb = [](void* /*userdata*/) {
-        glfwPollEvents();
-
-        // Create a command encoder from the device
-        WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
-            state.gpu.device,
-            nullptr);
-        assert(cmd_encoder);
-        auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
-
-        WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
-
-        // Render pass
-        {
-            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface, state.depth.view);
-            auto const end_pass = defer([&]() { RenderPass::end(pass); });
-
-            auto& mat = state.material;
-            mat.apply_pipeline(pass.encoder);
-
-            Mat4<f32> const local_to_world = make_local_to_world();
-            Mat4<f32> const world_to_view = make_world_to_view();
-            Mat4<f32> const view_to_clip = make_view_to_clip();
-
-            as_mat<4, 4>(mat.uniforms.local_to_clip) = //
-                view_to_clip * world_to_view * local_to_world;
-
-            mat.update_uniform_buffer(queue);
-            mat.bind_resources(pass.encoder);
-
-            auto& geom = state.geometry;
-            geom.bind_resources(pass.encoder);
-            geom.dispatch_draw(pass.encoder);
-        }
-
-        // Create encoded commands
-        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
-        assert(cmds);
-        auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
-
-        // Submit encoded commands
-        wgpuQueueSubmit(queue, 1, &cmds);
-
-        ++state.frame_count;
-    };
-
-    MainLoop{state.gpu.surface, state.window, loop_cb}.begin();
+    App::init({
+        .init_cb = init,
+        .frame_cb = update,
+        .deinit_cb = deinit,
+        .event_cb = handle_event,
+        .window{
+            .title = "WebGPU Sandbox: Textured Mesh",
+            .width = 800,
+            .height = 600,
+        },
+        .html_canvas_id = "#textured-mesh",
+    });
+    App::run();
+    App::deinit();
 
     return 0;
 }

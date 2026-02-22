@@ -11,7 +11,7 @@ include(deps/stb-image)
 target_link_libraries(
     ${app_name}
     PRIVATE
-        app-base
+        example-app
         stb::image
 )
 

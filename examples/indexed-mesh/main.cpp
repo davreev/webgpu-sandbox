@@ -4,27 +4,22 @@
 
 #include <webgpu/webgpu.h>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten/html5.h>
-#endif
-
 #include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
 #include <dr/defer.hpp>
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
 
-#include <emsc_utils.hpp>
-#include <wgpu_utils.hpp>
-
 #include "shader_src.hpp"
 
-#include "../example_base.hpp"
+#include "../example_app.hpp"
 
 namespace wgpu::sandbox
 {
 namespace
 {
+
+using App = ExampleApp;
 
 struct RenderPass
 {
@@ -190,15 +185,11 @@ struct RenderMesh
     }
 };
 
-struct AppState
+struct
 {
-    GLFWwindow* window;
-    GpuContext gpu;
-    WGPURenderPipeline pipeline;
+    WGPURenderPipeline pipeline{};
     RenderMesh geometry;
-};
-
-AppState state{};
+} state;
 
 WGPURenderPipeline make_render_pipeline(
     WGPUDevice const device,
@@ -267,71 +258,52 @@ WGPURenderPipeline make_render_pipeline(
     return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
 }
 
-void init_app()
+void init()
 {
-    glfwSetErrorCallback(
-        [](int errc, char const* msg) { fmt::print("GLFW error: {}\nMessage: {}\n", errc, msg); });
-
-    // Initialize GLFW
-    bool const glfw_ok = glfwInit();
-    assert(glfw_ok);
-
-    // Create GLFW window
-#ifdef __EMSCRIPTEN__
-    int init_width, init_height;
-    get_canvas_client_size(init_width, init_height);
-#else
-    constexpr int init_width = 800;
-    constexpr int init_height = 600;
-#endif
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    state.window = glfwCreateWindow(
-        init_width,
-        init_height,
-        "WebGPU Sandbox: Indexed Mesh",
-        nullptr,
-        nullptr);
-    assert(state.window);
-
-    // Create WebGPU context and report details
-    state.gpu = GpuContext::make({state.window, "#indexed-mesh"});
-    state.gpu.report();
-
-#ifdef __EMSCRIPTEN__
-    // Handle canvas resize
-    auto constexpr resize_cb =
-        [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
-        int w, h;
-        get_canvas_client_size(w, h);
-        glfwSetWindowSize(state.window, w, h);
-        return true;
-    };
-    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, resize_cb);
-#else
-    // Handle framebuffer resize
-    glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
-        state.gpu.config_surface(width, height);
-    });
-#endif
-
     // Create render pipeline
     state.pipeline = make_render_pipeline(
-        state.gpu.device,
+        App::gpu().device,
         {shader_src, WGPU_STRLEN},
         default_surface_format);
 
     // Create geometry
-    state.geometry = RenderMesh::make_quad(state.gpu.device);
+    state.geometry = RenderMesh::make_quad(App::gpu().device);
 }
 
-void deinit_app()
+void deinit()
 {
     RenderMesh::release(state.geometry);
     wgpuRenderPipelineRelease(state.pipeline);
-    GpuContext::release(state.gpu);
-    glfwDestroyWindow(state.window);
-    glfwTerminate();
     state = {};
+}
+
+void update()
+{
+    // Create a command encoder from the device
+    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
+        App::gpu().device,
+        nullptr);
+    assert(cmd_encoder);
+    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
+
+    // Render pass
+    {
+        RenderPass pass = RenderPass::begin(cmd_encoder, App::gpu().surface);
+        auto const end_pass = defer([&]() { RenderPass::end(pass); });
+
+        wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
+        state.geometry.bind_resources(pass.encoder);
+        state.geometry.dispatch_draw(pass.encoder);
+    }
+
+    // Create encoded commands
+    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    assert(cmds);
+    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
+
+    // Submit encoded commands
+    WGPUQueue const queue = wgpuDeviceGetQueue(App::gpu().device);
+    wgpuQueueSubmit(queue, 1, &cmds);
 }
 
 } // namespace
@@ -341,41 +313,19 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    init_app();
-    auto const _ = defer([]() { deinit_app(); });
-
-    // Main loop body
-    constexpr auto loop_cb = [](void* /*userdata*/) {
-        glfwPollEvents();
-
-        // Create a command encoder from the device
-        WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
-            state.gpu.device,
-            nullptr);
-        assert(cmd_encoder);
-        auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
-
-        // Render pass
-        {
-            RenderPass pass = RenderPass::begin(cmd_encoder, state.gpu.surface);
-            auto const end_pass = defer([&]() { RenderPass::end(pass); });
-
-            wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
-            state.geometry.bind_resources(pass.encoder);
-            state.geometry.dispatch_draw(pass.encoder);
-        }
-
-        // Create encoded commands
-        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
-        assert(cmds);
-        auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
-
-        // Submit encoded commands
-        WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
-        wgpuQueueSubmit(queue, 1, &cmds);
-    };
-
-    MainLoop{state.gpu.surface, state.window, loop_cb}.begin();
+    App::init({
+        .init_cb = init,
+        .frame_cb = update,
+        .deinit_cb = deinit,
+        .window{
+            .title = "WebGPU Sandbox: Indexed Mesh",
+            .width = 800,
+            .height = 600,
+        },
+        .html_canvas_id = "#indexed-mesh",
+    });
+    App::run();
+    App::deinit();
 
     return 0;
 }

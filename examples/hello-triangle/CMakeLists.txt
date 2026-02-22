@@ -8,7 +8,7 @@ add_executable(
 target_link_libraries(
     ${app_name}
     PRIVATE
-        app-base
+        example-app
 )
 
 if(EMSCRIPTEN)

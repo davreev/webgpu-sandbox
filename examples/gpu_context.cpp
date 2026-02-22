@@ -1,14 +1,8 @@
-#include "example_base.hpp"
+#include "gpu_context.hpp"
 
 #include <cassert>
 
 #include <fmt/core.h>
-
-#ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
-#endif
-
-#include <wgpu_imgui.hpp>
 
 namespace wgpu::sandbox
 {
@@ -114,7 +108,7 @@ void GpuContext::release(GpuContext& ctx)
     ctx = {};
 }
 
-void GpuContext::config_surface(int const width, int const height)
+void GpuContext::config_surface(i32 const width, i32 const height)
 {
     WGPUSurfaceConfiguration config{};
     {
@@ -130,7 +124,7 @@ void GpuContext::config_surface(int const width, int const height)
 
 void GpuContext::config_surface(GLFWwindow* const window)
 {
-    int width, height;
+    i32 width, height;
     glfwGetFramebufferSize(window, &width, &height);
     config_surface(width, height);
 }
@@ -145,68 +139,6 @@ void GpuContext::report()
 
     if (surface)
         report_surface_capabilities(surface, adapter);
-}
-
-void MainLoop::begin() const
-{
-#ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop_arg(callback, userdata, 0, true);
-#else
-    while (!glfwWindowShouldClose(window))
-    {
-        callback(userdata);
-        wgpuSurfacePresent(surface);
-    }
-#endif
-}
-
-void Gui::init(GLFWwindow* window, GpuContext const& ctx)
-{
-    ImGui::CreateContext();
-
-    ImGuiIO& io = ImGui::GetIO();
-    {
-        io.IniFilename = nullptr;
-        io.LogFilename = nullptr;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        // ...
-    }
-
-    ImGui::StyleColorsDark();
-
-    // Init GLFW impl
-    ImGui_ImplGlfw_InitForOther(window, true);
-
-    // Init WebGPU impl
-    ImGui_ImplWGPU_InitInfo config{};
-    {
-        config.Device = ctx.device;
-        config.NumFramesInFlight = 3;
-        config.RenderTargetFormat = default_surface_format;
-        config.DepthStencilFormat = WGPUTextureFormat_Undefined;
-    }
-    ImGui_ImplWGPU_Init(&config);
-}
-
-void Gui::deinit()
-{
-    ImGui_ImplWGPU_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-}
-
-void Gui::begin_frame()
-{
-    ImGui_ImplWGPU_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-}
-
-void Gui::end_frame() { ImGui::Render(); }
-
-void Gui::dispatch_draw(WGPURenderPassEncoder const encoder)
-{
-    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), encoder);
 }
 
 } // namespace wgpu::sandbox

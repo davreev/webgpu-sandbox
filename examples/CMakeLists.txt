@@ -1,23 +1,26 @@
 add_library(
-    app-base STATIC
-    example_base.cpp
+    example-app STATIC
+    example_app.cpp
+    gpu_context.cpp
 )
 
 include(deps/dr-app)
 target_link_libraries(
-    app-base
+    example-app
     PUBLIC
         dr::app-util
         wgpu-app
 )
 
 target_compile_options(
-    app-base
+    example-app
     PUBLIC
         -Wall 
         -Wextra 
         -Wpedantic
         -Werror
+        # Allow anonymous types in anonymous unions
+        -Wno-nested-anon-types
 )
 
 set(EXAMPLES_USE_SLANG ON)

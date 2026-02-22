@@ -2,25 +2,21 @@
 
 #include <fmt/core.h>
 
-#include <webgpu/webgpu.h>
+#include <imgui.h>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten/html5.h>
-#endif
+#include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
 #include <dr/defer.hpp>
 
-#include <emsc_utils.hpp>
-#include <wgpu_imgui.hpp>
-#include <wgpu_utils.hpp>
-
-#include "../example_base.hpp"
+#include "../example_app.hpp"
 
 namespace wgpu::sandbox
 {
 namespace
 {
+
+using App = ExampleApp;
 
 struct RenderPass
 {
@@ -87,77 +83,17 @@ struct RenderPass
     }
 };
 
-struct AppState
+struct
 {
-    GLFWwindow* window;
-    GpuContext gpu;
-    float clear_color[3]{0.8f, 0.2f, 0.4f};
-};
-
-AppState state{};
-
-void init_app()
-{
-    glfwSetErrorCallback(
-        [](int errc, char const* msg) { fmt::print("GLFW error: {}\nMessage: {}\n", errc, msg); });
-
-    // Initialize GLFW
-    bool const glfw_ok = glfwInit();
-    assert(glfw_ok);
-
-    // Create GLFW window
-#ifdef __EMSCRIPTEN__
-    int init_width, init_height;
-    get_canvas_client_size(init_width, init_height);
-#else
-    constexpr int init_width = 800;
-    constexpr int init_height = 600;
-#endif
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    state.window = glfwCreateWindow(
-        init_width,
-        init_height,
-        "WebGPU Sandbox: Hello ImGui",
-        nullptr,
-        nullptr);
-    assert(state.window);
-
-    // Create WebGPU context and report details
-    state.gpu = GpuContext::make({state.window, "#hello-imgui"});
-    state.gpu.report();
-
-#ifdef __EMSCRIPTEN__
-    // Handle canvas resize
-    auto constexpr resize_cb =
-        [](int /*event_type*/, EmscriptenUiEvent const* /*event*/, void* /*userdata*/) -> bool {
-        int w, h;
-        get_canvas_client_size(w, h);
-        glfwSetWindowSize(state.window, w, h);
-        return true;
-    };
-    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, false, resize_cb);
-#else
-    // Handle framebuffer resize
-    glfwSetFramebufferSizeCallback(state.window, [](GLFWwindow* /*window*/, int width, int height) {
-        state.gpu.config_surface(width, height);
-    });
-#endif
-
-    Gui::init(state.window, state.gpu);
-}
-
-void deinit_app()
-{
-    Gui::deinit();
-    GpuContext::release(state.gpu);
-    glfwDestroyWindow(state.window);
-    glfwTerminate();
-    state = {};
-}
+    f32 clear_color[3]{0.8f, 0.2f, 0.4f};
+    // ...
+    // ...
+    // ...
+} state;
 
 void draw_ui()
 {
-    Gui::begin_frame();
+    App::ui_begin();
 
     ImGui::SetNextWindowPos({10.0f, 10.0f}, ImGuiCond_FirstUseEver);
     constexpr int window_flags = ImGuiWindowFlags_AlwaysAutoResize;
@@ -183,7 +119,47 @@ void draw_ui()
 
     ImGui::End();
 
-    Gui::end_frame();
+    App::ui_end();
+}
+
+void update()
+{
+    GpuContext const& gpu = App::gpu();
+
+    // NOTE(dr): Use ImGuiIO::WantCapture* flags to determine if input events should be
+    // forwarded to the main application. In general, when one of these flags is true, the
+    // corresponding event should be consumed by ImGui.
+    draw_ui();
+
+    // Create a command encoder from the device
+    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
+    assert(cmd_encoder);
+    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
+
+    // Render pass
+    {
+        constexpr auto to_wgpu_color = [](f32 const c[3]) -> WGPUColor {
+            return {c[0], c[1], c[2], 1.0};
+        };
+
+        RenderPass pass = RenderPass::begin(
+            cmd_encoder,
+            gpu.surface,
+            to_wgpu_color(state.clear_color));
+        auto const end_pass = defer([&]() { RenderPass::end(pass); });
+
+        // Issue UI draw command
+        App::ui_draw(pass.encoder);
+    }
+
+    // Create encoded commands
+    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    assert(cmds);
+    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
+
+    // Submit encoded commands
+    WGPUQueue const queue = wgpuDeviceGetQueue(gpu.device);
+    wgpuQueueSubmit(queue, 1, &cmds);
 }
 
 } // namespace
@@ -193,53 +169,17 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    init_app();
-    auto const _ = defer([]() { deinit_app(); });
-
-    // Main loop
-    constexpr auto loop_cb = [](void* /*userdata*/) {
-        glfwPollEvents();
-
-        // NOTE(dr): Use ImGuiIO::WantCapture* flags to determine if input events should be
-        // forwarded to the main application. In general, when one of these flags is true, the
-        // corresponding event should be consumed by ImGui.
-
-        draw_ui();
-
-        // Create a command encoder from the device
-        WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
-            state.gpu.device,
-            nullptr);
-        assert(cmd_encoder);
-        auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
-
-        // Render pass
-        {
-            constexpr auto to_wgpu_color = [](float const c[3]) -> WGPUColor {
-                return {c[0], c[1], c[2], 1.0};
-            };
-
-            RenderPass pass = RenderPass::begin(
-                cmd_encoder,
-                state.gpu.surface,
-                to_wgpu_color(state.clear_color));
-            auto const end_pass = defer([&]() { RenderPass::end(pass); });
-
-            // Issue UI draw command
-            Gui::dispatch_draw(pass.encoder);
-        }
-
-        // Create encoded commands
-        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
-        assert(cmds);
-        auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
-
-        // Submit encoded commands
-        WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
-        wgpuQueueSubmit(queue, 1, &cmds);
-    };
-
-    MainLoop{state.gpu.surface, state.window, loop_cb}.begin();
+    App::init({
+        .frame_cb = update,
+        .window{
+            .title = "WebGPU Sandbox: Hello ImGui",
+            .width = 800,
+            .height = 600,
+        },
+        .html_canvas_id = "#hello-imgui",
+    });
+    App::run();
+    App::deinit();
 
     return 0;
 }

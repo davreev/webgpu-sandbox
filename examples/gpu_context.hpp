@@ -1,5 +1,7 @@
 #pragma once
 
+#include <dr/basic_types.hpp>
+
 #include <wgpu_utils.hpp>
 
 #include "dr_shim.hpp"
@@ -30,32 +32,11 @@ struct GpuContext
 
     static void release(GpuContext& ctx);
 
-    void config_surface(int width, int height);
+    void config_surface(i32 width, i32 height);
+
     void config_surface(GLFWwindow* window);
 
     void report();
 };
 
-struct MainLoop
-{
-    using Callback = void(void* userdata);
-    WGPUSurface surface{};
-    GLFWwindow* window{};
-    Callback* callback{};
-    void* userdata{};
-
-    void begin() const;
-};
-
-struct Gui
-{
-    static void init(GLFWwindow* window, GpuContext const& ctx);
-    static void deinit();
-
-    static void begin_frame();
-    static void end_frame();
-    
-    static void dispatch_draw(WGPURenderPassEncoder const encoder);
-};
-
-} // namespace wgpu::sandbox
+} // namespace webgpu::sandbox
