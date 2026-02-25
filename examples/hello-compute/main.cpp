@@ -12,6 +12,8 @@
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
 
+#include <emsc_utils.hpp>
+
 #include "shader_src.hpp"
 
 #include "../gpu_context.hpp"
