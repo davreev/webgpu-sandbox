@@ -28,15 +28,12 @@ target_compile_options(
         -Wall -Wextra -Wpedantic -Werror
 )
 
-# NOTE: Disabling these to make C++20 designated initializers actually useful
+# For C++20 designated init
 target_compile_options(
     wgpu-app
     PUBLIC
-        # For Clang > 18
-        -Wno-missing-designated-field-initializers
-        # For GCC and Clang <= 18
+        -Wno-c++20-extensions
         -Wno-missing-field-initializers
-        -Wno-unknown-warning-option
 )
 
 if(EMSCRIPTEN)
