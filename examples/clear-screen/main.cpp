@@ -134,7 +134,7 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    App::init({
+    App::run({
         .frame_cb = update,
         .window{
             .title = "WebGPU Sandbox: Clear Screen",
@@ -143,8 +143,6 @@ int main(int /*argc*/, char** /*argv*/)
         },
         .html_canvas_id = "#clear-screen",
     });
-    App::run();
-    App::deinit();
 
     return 0;
 }

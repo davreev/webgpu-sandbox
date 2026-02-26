@@ -169,7 +169,7 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    App::init({
+    App::run({
         .frame_cb = update,
         .window{
             .title = "WebGPU Sandbox: Hello ImGui",
@@ -178,8 +178,6 @@ int main(int /*argc*/, char** /*argv*/)
         },
         .html_canvas_id = "#hello-imgui",
     });
-    App::run();
-    App::deinit();
 
     return 0;
 }

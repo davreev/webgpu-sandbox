@@ -16,7 +16,17 @@ namespace wgpu::sandbox
 namespace
 {
 
-void ui_init(GLFWwindow* window, GpuContext const& ctx)
+struct
+{
+    ExampleApp::Callback* frame_cb{};
+    ExampleApp::EventCallback* event_cb{};
+    void* userdata{};
+    GLFWwindow* window{};
+    GpuContext gpu{};
+    usize frame_count{};
+} state;
+
+void ui_init()
 {
     ImGui::CreateContext();
 
@@ -28,35 +38,17 @@ void ui_init(GLFWwindow* window, GpuContext const& ctx)
 
     ImGui::StyleColorsDark();
 
-    ImGui_ImplGlfw_InitForOther(window, true);
+    ImGui_ImplGlfw_InitForOther(state.window, true);
 
     ImGui_ImplWGPU_InitInfo info{};
-    info.Device = ctx.device;
+    info.Device = state.gpu.device;
     info.NumFramesInFlight = 3;
     info.RenderTargetFormat = default_surface_format;
     info.DepthStencilFormat = WGPUTextureFormat_Undefined;
     ImGui_ImplWGPU_Init(&info);
 }
 
-void ui_deinit()
-{
-    ImGui_ImplWGPU_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-}
-
-struct
-{
-    ExampleApp::Callback* frame_cb{};
-    ExampleApp::Callback* deinit_cb{};
-    ExampleApp::EventCallback* event_cb{};
-    void* userdata{};
-    GLFWwindow* window{};
-    GpuContext gpu{};
-    usize frame_count{};
-} state;
-
-void set_event_callbacks()
+void app_set_event_callbacks()
 {
     using Event = ExampleApp::Event;
 
@@ -155,14 +147,11 @@ void set_event_callbacks()
 #endif
 }
 
-} // namespace
-
-void ExampleApp::init(Desc const& desc)
+void app_init(ExampleApp::Desc const& desc)
 {
     assert(desc.frame_cb);
 
     state.frame_cb = desc.frame_cb;
-    state.deinit_cb = desc.deinit_cb;
     state.event_cb = desc.event_cb;
     state.userdata = desc.userdata;
 
@@ -187,17 +176,40 @@ void ExampleApp::init(Desc const& desc)
     });
     state.gpu.report();
 
-    set_event_callbacks();
+    app_set_event_callbacks();
 
-    ui_init(state.window, state.gpu);
+    ui_init();
 
     if (desc.init_cb)
         desc.init_cb();
 }
 
-void ExampleApp::run()
+void ui_deinit()
+{
+    ImGui_ImplWGPU_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void app_deinit(ExampleApp::Desc const& desc)
 {
     assert(state.window);
+
+    if (desc.deinit_cb)
+        desc.deinit_cb();
+
+    ui_deinit();
+    GpuContext::release(state.gpu);
+    glfwDestroyWindow(state.window);
+    glfwTerminate();
+    state = {};
+}
+
+} // namespace
+
+void ExampleApp::run(Desc const& desc)
+{
+    app_init(desc);
 
     static constexpr auto main_loop = []() {
         glfwPollEvents();
@@ -214,20 +226,8 @@ void ExampleApp::run()
         wgpuSurfacePresent(state.gpu.surface);
     }
 #endif
-}
 
-void ExampleApp::deinit()
-{
-    assert(state.window);
-
-    if (state.deinit_cb)
-        state.deinit_cb();
-
-    ui_deinit();
-    GpuContext::release(state.gpu);
-    glfwDestroyWindow(state.window);
-    glfwTerminate();
-    state = {};
+    app_deinit(desc);
 }
 
 void ExampleApp::ui_begin()

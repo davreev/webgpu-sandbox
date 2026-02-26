@@ -80,11 +80,7 @@ struct ExampleApp
         void* userdata{};
     };
 
-    static void init(Desc const& desc);
-
-    static void run();
-
-    static void deinit();
+    static void run(Desc const& desc);
 
     static void ui_begin();
 

@@ -777,7 +777,7 @@ int main(int /*argc*/, char** /*argv*/)
 {
     using namespace wgpu::sandbox;
 
-    App::init({
+    App::run({
         .init_cb = init,
         .frame_cb = update,
         .deinit_cb = deinit,
@@ -789,8 +789,6 @@ int main(int /*argc*/, char** /*argv*/)
         },
         .html_canvas_id = "#textured-mesh",
     });
-    App::run();
-    App::deinit();
 
     return 0;
 }
