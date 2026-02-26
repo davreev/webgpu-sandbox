@@ -20,7 +20,7 @@ add_library(stb::image ALIAS stb-image)
 
 target_include_directories(
     stb-image
-    SYSTEM # Ignore warnings
+    SYSTEM # Suppress warnings from third party headers
     INTERFACE 
         "${stb-image_SOURCE_DIR}"
 )

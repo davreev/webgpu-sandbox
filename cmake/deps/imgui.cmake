@@ -26,6 +26,7 @@ add_library(imgui::imgui ALIAS imgui)
 
 target_include_directories(
     imgui 
+    SYSTEM # Suppress warnings from third party headers
     PUBLIC
         "${imgui_SOURCE_DIR}"
 )
