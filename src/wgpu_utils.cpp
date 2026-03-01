@@ -70,13 +70,13 @@ void report_limits(WGPULimits const& limits)
 WGPUSurface make_surface(WGPUInstance const instance, SurfaceSource const& surface_src)
 {
 #ifdef __EMSCRIPTEN__
-    WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvas_desc{};
-    canvas_desc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
-    canvas_desc.selector = {surface_src.canvas_id, WGPU_STRLEN};
-
-    WGPUSurfaceDescriptor desc{};
-    desc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&canvas_desc);
-
+    WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvas_desc{
+        .chain{.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector},
+        .selector{surface_src.canvas_id, WGPU_STRLEN},
+    };
+    WGPUSurfaceDescriptor desc{
+        .nextInChain = reinterpret_cast<WGPUChainedStruct*>(&canvas_desc),
+    };
     return wgpuInstanceCreateSurface(instance, &desc);
 #else
     return wgpu_make_surface_from_glfw(instance, surface_src.window);
@@ -88,8 +88,9 @@ WGPUWaitStatus wait_for_future(
     WGPUFuture const future,
     std::uint64_t const timeout)
 {
-    WGPUFutureWaitInfo info = {};
-    info.future = future;
+    WGPUFutureWaitInfo info{
+        .future = future,
+    };
 
     // NOTE(dr): This function isn't implemented by wgpu-native yet and will panic at runtime
     // (https://github.com/gfx-rs/wgpu-native/issues/510)
@@ -106,26 +107,27 @@ WGPUAdapter request_adapter(
         bool is_ready;
     } result{};
 
-    WGPURequestAdapterCallbackInfo cb_info{};
-    cb_info.userdata1 = &result;
-    cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
-    cb_info.callback = //
-        [](WGPURequestAdapterStatus status,
-           WGPUAdapter adapter,
-           WGPUStringView message,
-           void* userdata1,
-           void* /*userdata2*/) {
-            auto result = static_cast<ReqResult*>(userdata1);
-            if (status == WGPURequestAdapterStatus_Success)
-                result->adapter = adapter;
-            else
-                fmt::println("Could not get WebGPU adapter. Message: {}", message.data);
+    WGPURequestAdapterCallbackInfo const cb_info{
+        .mode = WGPUCallbackMode_AllowSpontaneous,
+        .callback =
+            [](WGPURequestAdapterStatus status,
+               WGPUAdapter adapter,
+               WGPUStringView message,
+               void* userdata1,
+               void* /*userdata2*/) {
+                auto result = static_cast<ReqResult*>(userdata1);
+                if (status == WGPURequestAdapterStatus_Success)
+                    result->adapter = adapter;
+                else
+                    fmt::println("Could not get WebGPU adapter. Message: {}", message.data);
 #ifdef __EMSCRIPTEN__
-            raise_event("wgpuAdapterReady");
+                raise_event("wgpuAdapterReady");
 #else
-            result->is_ready = true;
+                result->is_ready = true;
 #endif
-        };
+            },
+        .userdata1 = &result,
+    };
 
     [[maybe_unused]]
     WGPUFuture const fut = wgpuInstanceRequestAdapter(instance, options, cb_info);
@@ -154,26 +156,27 @@ WGPUDevice request_device(
         bool is_ready;
     } result{};
 
-    WGPURequestDeviceCallbackInfo cb_info{};
-    cb_info.userdata1 = &result;
-    cb_info.mode = WGPUCallbackMode_AllowSpontaneous;
-    cb_info.callback = //
-        [](WGPURequestDeviceStatus status,
-           WGPUDevice device,
-           WGPUStringView message,
-           void* userdata1,
-           void* /*userdata2*/) {
-            auto result = static_cast<ReqResult*>(userdata1);
-            if (status == WGPURequestDeviceStatus_Success)
-                result->device = device;
-            else
-                fmt::println("Could not get WebGPU device. Message: {}", message.data);
+    WGPURequestDeviceCallbackInfo const cb_info{
+        .mode = WGPUCallbackMode_AllowSpontaneous,
+        .callback =
+            [](WGPURequestDeviceStatus status,
+               WGPUDevice device,
+               WGPUStringView message,
+               void* userdata1,
+               void* /*userdata2*/) {
+                auto result = static_cast<ReqResult*>(userdata1);
+                if (status == WGPURequestDeviceStatus_Success)
+                    result->device = device;
+                else
+                    fmt::println("Could not get WebGPU device. Message: {}", message.data);
 #ifdef __EMSCRIPTEN__
-            raise_event("wgpuDeviceReady");
+                raise_event("wgpuDeviceReady");
 #else
-            result->is_ready = true;
+                result->is_ready = true;
 #endif
-        };
+            },
+        .userdata1 = &result,
+    };
 
     [[maybe_unused]]
     WGPUFuture const fut = wgpuAdapterRequestDevice(adapter, desc, cb_info);
