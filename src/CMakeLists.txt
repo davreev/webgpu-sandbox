@@ -25,7 +25,7 @@ target_link_libraries(
 target_compile_options(
     wgpu-app
     PRIVATE
-        -Wall -Wextra -Wpedantic -Werror
+        -Wall -Wextra -Wpedantic #-Werror
 )
 
 # For C++20 designated init

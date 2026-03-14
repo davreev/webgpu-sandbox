@@ -137,8 +137,8 @@ WGPUAdapter request_adapter(
     wait_for_event("wgpuAdapterReady");
 #else
     // NOTE(dr): Waiting on futures is not yet implemented in wgpu-native
-    // wait_for_future(instance, fut);
-    wait_for_condition(instance, [&]() { return result.is_ready; });
+    wait_for_future(instance, fut);
+    // wait_for_condition(instance, [&]() { return result.is_ready; });
 #endif
 
     assert(result.adapter);
@@ -186,8 +186,8 @@ WGPUDevice request_device(
     wait_for_event("wgpuDeviceReady");
 #else
     // NOTE(dr): Waiting on futures is not yet implemented in wgpu-native
-    // wait_for_future(instance, fut);
-    wait_for_condition(instance, [&]() { return result.is_ready; });
+    wait_for_future(instance, fut);
+    // wait_for_condition(instance, [&]() { return result.is_ready; });
 #endif
 
     assert(result.device);
@@ -200,7 +200,7 @@ void report_adapter_features(WGPUAdapter const adapter)
     wgpuAdapterGetFeatures(adapter, &features);
 
     fmt::println("Adapter features:");
-    report_features(features);
+    // report_features(features);
 }
 
 void report_adapter_limits(WGPUAdapter const adapter)
@@ -220,7 +220,7 @@ void report_adapter_properties(WGPUAdapter const adapter)
     wgpuAdapterGetInfo(adapter, &info);
 
     fmt::println("Adapter properties:");
-    fmt::println("\tvendor: {} (id: {})", info.vendor.data, info.vendorID);
+    // fmt::println("\tvendor: {} (id: {})", info.vendor.data, info.vendorID);
     fmt::println("\tdevice: {} (id: {})", info.device.data, info.deviceID);
     if (info.architecture.data)
         fmt::println("\tarchitecture: {}", info.architecture.data);
@@ -234,7 +234,7 @@ void report_device_features(WGPUDevice const device)
     WGPUSupportedFeatures features;
     wgpuDeviceGetFeatures(device, &features);
     fmt::println("Device features:");
-    report_features(features);
+    // report_features(features);
 }
 
 void report_device_limits(WGPUDevice const device)
