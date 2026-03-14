@@ -79,6 +79,7 @@ else()
     target_compile_definitions(
         imgui
         PUBLIC
-            IMGUI_IMPL_WEBGPU_BACKEND_WGPU
+            # IMGUI_IMPL_WEBGPU_BACKEND_WGPU
+            IMGUI_IMPL_WEBGPU_BACKEND_DAWN
     )
 endif()

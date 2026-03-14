@@ -14,12 +14,12 @@ target_include_directories(
 )
 
 include(deps/fmt)
-# include(deps/imgui) # Disabling ImGui for now. WebGPU impl doesn't appear to be compatible with WGVK.
+include(deps/imgui)
 target_link_libraries(
     wgpu-app
     PUBLIC
         fmt::fmt
-        # imgui-wgpu
+        imgui-wgpu
 )
 
 target_compile_options(
