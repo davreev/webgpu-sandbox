@@ -24,8 +24,19 @@ WGPUBindGroupLayout uniform_bg_layout{};
 
 } // namespace
 
+void check_device_limits(WGPUDevice const device)
+{
+    WGPULimits limits{};
+    [[maybe_unused]]
+    auto const status = wgpuDeviceGetLimits(device, &limits);
+    assert(status == WGPUStatus::WGPUStatus_Success);
+    assert(uniform_buffer_alignment >= limits.minUniformBufferOffsetAlignment);
+}
+
 void DrawContext::init_shared_resources(WGPUDevice const device)
 {
+    check_device_limits(device);
+
     if (uniform_bg_layout)
         wgpuBindGroupLayoutRelease(uniform_bg_layout);
 

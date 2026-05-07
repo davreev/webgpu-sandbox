@@ -21,8 +21,20 @@ WGPUBindGroupLayout bindings_layout{};
 
 } // namespace
 
+void check_device_limits(WGPUDevice const device)
+{
+    WGPULimits limits{};
+    [[maybe_unused]]
+    auto const status = wgpuDeviceGetLimits(device, &limits);
+    assert(status == WGPUStatus::WGPUStatus_Success);
+    assert(num_vertex_buffers <= limits.maxDynamicStorageBuffersPerPipelineLayout);
+    assert(vertex_buffer_alignment >= limits.minStorageBufferOffsetAlignment);
+}
+
 void GeometryStream::init_shared_resources(WGPUDevice const device)
 {
+    check_device_limits(device);
+
     if (bindings_layout)
         wgpuBindGroupLayoutRelease(bindings_layout);
 
@@ -89,7 +101,7 @@ u32 GeometryStream::push_indices_once(void const* key, Span<u8 const> const& dat
 void GeometryStream::rebuild_bindings(WGPUDevice const device)
 {
     assert(bindings_layout);
-    
+
     if (bindings_)
         wgpuBindGroupRelease(bindings_);
 
