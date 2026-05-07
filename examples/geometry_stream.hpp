@@ -35,7 +35,7 @@ struct GeometryStream
 
     void update_device_buffers(WGPUDevice device, WGPUQueue queue);
 
-    WGPUBindGroup bindings() const { return bg_; }
+    WGPUBindGroup bindings() const { return bindings_; }
 
     WGPUBuffer index_buffer() const { return index_stage_.device_buf; }
 
@@ -56,9 +56,9 @@ struct GeometryStream
 
     BufferStage vertex_stage_;
     BufferStage index_stage_;
-    HashMap<VertexKey, i32, VertexKey::Hash> vertex_offsets_;
-    HashMap<void const*, i32> index_offsets_;
-    WGPUBindGroup bg_{};
+    HashMap<VertexKey, u32, VertexKey::Hash> vertex_offsets_;
+    HashMap<void const*, u32> index_offsets_;
+    WGPUBindGroup bindings_{};
 
     void rebuild_bindings(WGPUDevice device);
 };

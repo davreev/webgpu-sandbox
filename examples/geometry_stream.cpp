@@ -17,14 +17,14 @@ constexpr usize aligned_size(usize const size, usize const align)
 constexpr u32 num_vertex_buffers = default_max_dynamic_storage_buffers_per_pipeline_layout;
 constexpr u32 vertex_buffer_alignment = default_min_storage_buffer_offset_alignment;
 
-WGPUBindGroupLayout bg_layout{};
+WGPUBindGroupLayout bindings_layout{};
 
 } // namespace
 
 void GeometryStream::init_shared_resources(WGPUDevice const device)
 {
-    if (bg_layout)
-        wgpuBindGroupLayoutRelease(bg_layout);
+    if (bindings_layout)
+        wgpuBindGroupLayoutRelease(bindings_layout);
 
     WGPUBindGroupLayoutEntry entries[num_vertex_buffers]{};
     for (u32 i = 0; i < num_vertex_buffers; ++i)
@@ -35,7 +35,7 @@ void GeometryStream::init_shared_resources(WGPUDevice const device)
             .buffer{
                 .type = WGPUBufferBindingType_ReadOnlyStorage,
                 .hasDynamicOffset = true,
-                .minBindingSize = vertex_buffer_alignment,
+                .minBindingSize = 0,
             },
         };
     }
@@ -43,7 +43,7 @@ void GeometryStream::init_shared_resources(WGPUDevice const device)
         .entryCount = num_vertex_buffers,
         .entries = entries,
     };
-    bg_layout = wgpuDeviceCreateBindGroupLayout(device, &desc);
+    bindings_layout = wgpuDeviceCreateBindGroupLayout(device, &desc);
 }
 
 bool GeometryStream::VertexKey::operator==(VertexKey const& other) const
@@ -88,8 +88,10 @@ u32 GeometryStream::push_indices_once(void const* key, Span<u8 const> const& dat
 
 void GeometryStream::rebuild_bindings(WGPUDevice const device)
 {
-    if (bg_)
-        wgpuBindGroupRelease(bg_);
+    assert(bindings_layout);
+    
+    if (bindings_)
+        wgpuBindGroupRelease(bindings_);
 
     WGPUBindGroupEntry entries[num_vertex_buffers]{};
     for (u32 i = 0; i < num_vertex_buffers; ++i)
@@ -101,11 +103,11 @@ void GeometryStream::rebuild_bindings(WGPUDevice const device)
         };
     }
     WGPUBindGroupDescriptor const desc{
-        .layout = bg_layout,
+        .layout = bindings_layout,
         .entryCount = num_vertex_buffers,
         .entries = entries,
     };
-    bg_ = wgpuDeviceCreateBindGroup(device, &desc);
+    bindings_ = wgpuDeviceCreateBindGroup(device, &desc);
 }
 
 void GeometryStream::update_device_buffers(WGPUDevice const device, WGPUQueue const queue)

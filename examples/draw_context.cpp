@@ -18,7 +18,7 @@ enum struct BindIndex : u8
     Object,
 };
 
-constexpr u32 uniform_buffer_alignment = default_min_storage_buffer_offset_alignment;
+constexpr u32 uniform_buffer_alignment = default_min_uniform_buffer_offset_alignment;
 
 WGPUBindGroupLayout uniform_bg_layout{};
 
@@ -36,7 +36,7 @@ void DrawContext::init_shared_resources(WGPUDevice const device)
             .buffer{
                 .type = WGPUBufferBindingType_Uniform,
                 .hasDynamicOffset = true,
-                .minBindingSize = uniform_buffer_alignment,
+                .minBindingSize = 0,
             },
         },
     };
@@ -63,6 +63,8 @@ u32 DrawContext::push_uniforms_once(void const* key, Span<u8 const> const& data)
 
 void DrawContext::rebuild_uniform_bg(WGPUDevice const device)
 {
+    assert(uniform_bg_layout);
+
     if (uniform_bg_)
         wgpuBindGroupRelease(uniform_bg_);
 
@@ -169,7 +171,7 @@ void DrawContext::submit_draw_cmds(
                 auto const index_buf = cmd.index_buf ? cmd.index_buf : geometry.index_buffer();
                 assert(index_buf);
 
-                if (index_buf && index_buf != prev_index_buf)
+                if (index_buf != prev_index_buf)
                 {
                     wgpuRenderPassEncoderSetIndexBuffer(
                         encoder,
