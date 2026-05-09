@@ -4,6 +4,8 @@
 
 #include <wgpu_utils.hpp>
 
+#include "gpu_resource.hpp"
+
 #include "dr_shim.hpp"
 
 namespace wgpu::sandbox
@@ -14,10 +16,10 @@ inline constexpr WGPUPresentMode default_surface_present_mode = WGPUPresentMode_
 
 struct GpuContext
 {
-    WGPUInstance instance;
-    WGPUSurface surface;
-    WGPUAdapter adapter;
-    WGPUDevice device;
+    GpuInstance instance;
+    GpuAdapter adapter;
+    GpuDevice device;
+    GpuSurface surface;
 
     static GpuContext make(
         WGPUInstanceDescriptor const* instance_desc = nullptr,
@@ -30,13 +32,10 @@ struct GpuContext
         WGPURequestAdapterOptions const* adapter_opts = nullptr,
         WGPUDeviceDescriptor const* device_desc = nullptr);
 
-    static void release(GpuContext& ctx);
-
     void config_surface(i32 width, i32 height);
-
     void config_surface(GLFWwindow* window);
 
     void report();
 };
 
-} // namespace webgpu::sandbox
+} // namespace wgpu::sandbox

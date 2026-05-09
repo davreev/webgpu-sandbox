@@ -199,7 +199,7 @@ void app_deinit(ExampleApp::Desc const& desc)
         desc.deinit_cb();
 
     ui_deinit();
-    GpuContext::release(state.gpu);
+    state.gpu.surface = {};
     glfwDestroyWindow(state.window);
     glfwTerminate();
     state = {};

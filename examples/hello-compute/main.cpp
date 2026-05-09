@@ -271,7 +271,6 @@ void deinit()
     wgpuBufferRelease(state.buffers[1]);
     UnaryKernel::release(state.kernel);
     UnaryKernel::deinit();
-    GpuContext::release(state.gpu);
     state = {};
 }
 

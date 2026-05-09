@@ -1,7 +1,10 @@
 add_library(
     example-app STATIC
+    draw_context.cpp
     example_app.cpp
+    geometry_stream.cpp
     gpu_context.cpp
+    gpu_resource.cpp
 )
 
 include(deps/dr-app)

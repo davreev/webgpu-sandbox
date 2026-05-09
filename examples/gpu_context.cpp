@@ -95,19 +95,6 @@ GpuContext GpuContext::make(
     return result;
 }
 
-void GpuContext::release(GpuContext& ctx)
-{
-    if (ctx.surface)
-    {
-        wgpuSurfaceUnconfigure(ctx.surface);
-        wgpuSurfaceRelease(ctx.surface);
-    }
-    wgpuDeviceRelease(ctx.device);
-    wgpuAdapterRelease(ctx.adapter);
-    wgpuInstanceRelease(ctx.instance);
-    ctx = {};
-}
-
 void GpuContext::config_surface(i32 const width, i32 const height)
 {
     WGPUSurfaceConfiguration config{};
