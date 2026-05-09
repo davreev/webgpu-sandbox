@@ -26,7 +26,7 @@ struct DrawCommand
     WGPUBindGroup geometry_bg{};
     WGPUBuffer index_buf{};
     Maybe<u32[4]> geometry_offsets{};
-    u32 uniform_offset{};
+    Maybe<u32> uniform_offset{};
 
     union
     {

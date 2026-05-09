@@ -10,6 +10,7 @@
 
 #include "draw_command.hpp"
 #include "geometry_stream.hpp"
+#include "gpu_resource.hpp"
 
 #include "dr_shim.hpp"
 
@@ -35,7 +36,7 @@ struct DrawContext
   private:
     BufferStage uniform_stage_;
     HashMap<void const*, u32> uniform_offsets_;
-    WGPUBindGroup uniform_bg_{};
+    GpuBindGroup uniform_bg_{};
 
     void rebuild_uniform_bg(WGPUDevice device);
 };

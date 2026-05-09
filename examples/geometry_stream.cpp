@@ -17,7 +17,7 @@ constexpr usize aligned_size(usize const size, usize const align)
 constexpr u32 num_vertex_buffers = default_max_dynamic_storage_buffers_per_pipeline_layout;
 constexpr u32 vertex_buffer_alignment = default_min_storage_buffer_offset_alignment;
 
-WGPUBindGroupLayout bindings_layout{};
+GpuBindGroupLayout bindings_layout{};
 
 } // namespace
 
@@ -34,9 +34,6 @@ void check_device_limits(WGPUDevice const device)
 void GeometryStream::init_shared_resources(WGPUDevice const device)
 {
     check_device_limits(device);
-
-    if (bindings_layout)
-        wgpuBindGroupLayoutRelease(bindings_layout);
 
     WGPUBindGroupLayoutEntry entries[num_vertex_buffers]{};
     for (u32 i = 0; i < num_vertex_buffers; ++i)
@@ -102,9 +99,6 @@ void GeometryStream::rebuild_bindings(WGPUDevice const device)
 {
     assert(bindings_layout);
 
-    if (bindings_)
-        wgpuBindGroupRelease(bindings_);
-
     WGPUBindGroupEntry entries[num_vertex_buffers]{};
     for (u32 i = 0; i < num_vertex_buffers; ++i)
     {
@@ -158,10 +152,6 @@ bool BufferStage::update_device(
     if (host_buf.size() > device_size)
     {
         device_size = host_buf.capacity();
-
-        if (device_buf)
-            wgpuBufferRelease(device_buf);
-
         WGPUBufferDescriptor const desc{
             .usage = usage | WGPUBufferUsage_CopyDst,
             .size = device_size,

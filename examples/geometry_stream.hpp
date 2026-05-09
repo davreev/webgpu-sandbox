@@ -8,6 +8,8 @@
 #include <dr/hash_map.hpp>
 #include <dr/span.hpp>
 
+#include "gpu_resource.hpp"
+
 #include "dr_shim.hpp"
 
 namespace wgpu::sandbox
@@ -16,7 +18,7 @@ namespace wgpu::sandbox
 struct BufferStage
 {
     DynamicArray<u8> host_buf;
-    WGPUBuffer device_buf{};
+    GpuBuffer device_buf{};
     usize device_size{};
 
     u32 append(Span<u8 const> const& bytes, usize align);
@@ -58,7 +60,7 @@ struct GeometryStream
     BufferStage index_stage_;
     HashMap<VertexKey, u32, VertexKey::Hash> vertex_offsets_;
     HashMap<void const*, u32> index_offsets_;
-    WGPUBindGroup bindings_{};
+    GpuBindGroup bindings_{};
 
     void rebuild_bindings(WGPUDevice device);
 };

@@ -20,7 +20,7 @@ enum struct BindIndex : u8
 
 constexpr u32 uniform_buffer_alignment = default_min_uniform_buffer_offset_alignment;
 
-WGPUBindGroupLayout uniform_bg_layout{};
+GpuBindGroupLayout uniform_bg_layout{};
 
 } // namespace
 
@@ -36,9 +36,6 @@ void check_device_limits(WGPUDevice const device)
 void DrawContext::init_shared_resources(WGPUDevice const device)
 {
     check_device_limits(device);
-
-    if (uniform_bg_layout)
-        wgpuBindGroupLayoutRelease(uniform_bg_layout);
 
     WGPUBindGroupLayoutEntry const entries[1]{
         {
@@ -75,9 +72,6 @@ u32 DrawContext::push_uniforms_once(void const* key, Span<u8 const> const& data)
 void DrawContext::rebuild_uniform_bg(WGPUDevice const device)
 {
     assert(uniform_bg_layout);
-
-    if (uniform_bg_)
-        wgpuBindGroupRelease(uniform_bg_);
 
     WGPUBindGroupEntry const entries[1]{
         {
@@ -154,7 +148,7 @@ void DrawContext::submit_draw_cmds(
                     u32(BindIndex::Geometry),
                     cmd.geometry_bg ? cmd.geometry_bg : geometry.bindings(),
                     4,
-                    cmd.geometry_offsets.value);
+                    cmd.geometry_offsets.value());
 
                 // Ignore prev bg when using dynamic offsets
                 prev_geometry_bg = {};
@@ -195,14 +189,14 @@ void DrawContext::submit_draw_cmds(
                 }
             }
 
-            if (uniform_bg_)
+            if (uniform_bg_ && cmd.uniform_offset)
             {
                 wgpuRenderPassEncoderSetBindGroup(
                     encoder,
                     u32(BindIndex::Object),
                     uniform_bg_,
                     1,
-                    &cmd.uniform_offset);
+                    &cmd.uniform_offset.value());
             }
 
             switch (cmd.type)
