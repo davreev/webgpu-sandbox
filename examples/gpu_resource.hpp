@@ -40,7 +40,7 @@ struct GpuResource
     ~GpuResource() { release(); }
 
     operator Handle() const { return handle_; }
-    Handle handle() const { return handle_; }
+    Handle const& handle() const { return handle_; }
 
   private:
     Handle handle_{};

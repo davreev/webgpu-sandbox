@@ -7,9 +7,9 @@
 #include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
-#include <dr/defer.hpp>
 
 #include "../example_app.hpp"
+#include "../gpu_resource.hpp"
 
 namespace wgpu::sandbox
 {
@@ -20,10 +20,10 @@ using App = ExampleApp;
 
 struct RenderPass
 {
-    WGPURenderPassEncoder encoder;
-    WGPUTextureView surface_view;
+    GpuTextureView surface_view;
+    GpuRenderPassEncoder encoder;
 
-    static RenderPass begin(
+    static RenderPass make(
         WGPUCommandEncoder const cmd_encoder,
         WGPUSurface const surface,
         WGPUColor const& clear_color)
@@ -37,14 +37,6 @@ struct RenderPass
         assert(result.encoder);
 
         return result;
-    }
-
-    static void end(RenderPass& pass)
-    {
-        wgpuRenderPassEncoderEnd(pass.encoder);
-        wgpuRenderPassEncoderRelease(pass.encoder);
-        wgpuTextureViewRelease(pass.surface_view);
-        pass = {};
     }
 
   private:
@@ -132,34 +124,30 @@ void update()
     draw_ui();
 
     // Create a command encoder from the device
-    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
+    GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
     assert(cmd_encoder);
-    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
-
     // Render pass
     {
         constexpr auto to_wgpu_color = [](f32 const c[3]) -> WGPUColor {
             return {c[0], c[1], c[2], 1.0};
         };
 
-        RenderPass pass = RenderPass::begin(
+        RenderPass pass = RenderPass::make(
             cmd_encoder,
             gpu.surface,
             to_wgpu_color(state.clear_color));
-        auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
         // Issue UI draw command
         App::ui_draw(pass.encoder);
     }
 
     // Create encoded commands
-    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    GpuCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
     assert(cmds);
-    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
     // Submit encoded commands
     WGPUQueue const queue = wgpuDeviceGetQueue(gpu.device);
-    wgpuQueueSubmit(queue, 1, &cmds);
+    wgpuQueueSubmit(queue, 1, &cmds.handle());
 }
 
 } // namespace

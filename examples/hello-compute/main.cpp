@@ -17,6 +17,7 @@
 #include "shader_src.hpp"
 
 #include "../gpu_context.hpp"
+#include "../gpu_resource.hpp"
 
 namespace wgpu::sandbox
 {
@@ -25,25 +26,16 @@ namespace
 
 struct UnaryKernel
 {
-    inline static WGPUBindGroupLayout bind_group_layout{};
-    inline static WGPUPipelineLayout pipeline_layout{};
+    inline static GpuBindGroupLayout bind_group_layout{};
+    inline static GpuPipelineLayout pipeline_layout{};
 
-    WGPUComputePipeline pipeline;
-    WGPUBindGroup bind_group;
+    GpuComputePipeline pipeline;
+    GpuBindGroup bind_group;
 
-    static void init(WGPUDevice const device)
+    static void init_shared_resources(WGPUDevice const device)
     {
         bind_group_layout = make_bind_group_layout(device);
         pipeline_layout = make_pipeline_layout(device, bind_group_layout);
-    }
-
-    static void deinit()
-    {
-        wgpuPipelineLayoutRelease(pipeline_layout);
-        pipeline_layout = {};
-
-        wgpuBindGroupLayoutRelease(bind_group_layout);
-        bind_group_layout = {};
     }
 
     static UnaryKernel make(WGPUDevice const device, char const* const shader_src)
@@ -56,21 +48,8 @@ struct UnaryKernel
         return result;
     }
 
-    static void release(UnaryKernel& kernel)
-    {
-        if (kernel.bind_group)
-            wgpuBindGroupRelease(kernel.bind_group);
-
-        wgpuComputePipelineRelease(kernel.pipeline);
-
-        kernel = {};
-    }
-
     void update_bind_group(WGPUDevice const device, WGPUBuffer const buffer)
     {
-        if (bind_group)
-            wgpuBindGroupRelease(bind_group);
-
         bind_group = make_bind_group(device, bind_group_layout, buffer);
         assert(bind_group);
     }
@@ -122,9 +101,7 @@ struct UnaryKernel
         WGPUShaderModuleDescriptor const shader_desc{
             .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
         };
-        WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
-        auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
-
+        GpuShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
         WGPUComputePipelineDescriptor const pipe_desc{
             .layout = layout,
             .compute{
@@ -158,18 +135,11 @@ struct UnaryKernel
 
 struct ComputePass
 {
-    WGPUComputePassEncoder encoder;
+    GpuComputePassEncoder encoder;
 
-    static ComputePass begin(WGPUCommandEncoder const cmd_encoder)
+    static ComputePass make(WGPUCommandEncoder const cmd_encoder)
     {
-        return {wgpuCommandEncoderBeginComputePass(cmd_encoder, nullptr)};
-    }
-
-    static void end(ComputePass& pass)
-    {
-        wgpuComputePassEncoderEnd(pass.encoder);
-        wgpuComputePassEncoderRelease(pass.encoder);
-        pass = {};
+        return {.encoder = wgpuCommandEncoderBeginComputePass(cmd_encoder, nullptr)};
     }
 };
 
@@ -234,7 +204,7 @@ struct
 {
     GpuContext gpu;
     UnaryKernel kernel;
-    WGPUBuffer buffers[2]{};
+    GpuBuffer buffers[2]{};
 } state;
 
 WGPUBuffer make_buffer(WGPUDevice const device, size_t const size, WGPUBufferUsage const usage)
@@ -251,7 +221,7 @@ void init()
     state.gpu = GpuContext::make();
     state.gpu.report();
 
-    UnaryKernel::init(state.gpu.device);
+    UnaryKernel::init_shared_resources(state.gpu.device);
     state.kernel = UnaryKernel::make(state.gpu.device, shader_src);
 
     constexpr usize buffer_size = 100 * sizeof(f32);
@@ -265,15 +235,6 @@ void init()
         WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead);
 }
 
-void deinit()
-{
-    wgpuBufferRelease(state.buffers[0]);
-    wgpuBufferRelease(state.buffers[1]);
-    UnaryKernel::release(state.kernel);
-    UnaryKernel::deinit();
-    state = {};
-}
-
 } // namespace
 } // namespace wgpu::sandbox
 
@@ -282,23 +243,20 @@ int main(int /*argc*/, char** /*argv*/)
     using namespace wgpu::sandbox;
 
     init();
-    auto const _ = defer([]() { deinit(); });
 
     state.kernel.update_bind_group(state.gpu.device, state.buffers[0]);
 
     // Dispatch command(s)
     {
         // Create command encoder
-        WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
+        GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
             state.gpu.device,
             nullptr);
         assert(cmd_encoder);
-        auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
         // Compute pass
         {
-            ComputePass pass = ComputePass::begin(cmd_encoder);
-            auto const end_pass = defer([&]() { ComputePass::end(pass); });
+            ComputePass pass = ComputePass::make(cmd_encoder);
 
             // Dispatch compute kernels
             state.kernel.dispatch(pass.encoder);
@@ -317,13 +275,12 @@ int main(int /*argc*/, char** /*argv*/)
             wgpuBufferGetSize(state.buffers[0]));
 
         // Create encoded commands
-        WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+        GpuCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
         assert(cmds);
-        auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
         // Submit the encoded command
         WGPUQueue const queue = wgpuDeviceGetQueue(state.gpu.device);
-        wgpuQueueSubmit(queue, 1, &cmds);
+        wgpuQueueSubmit(queue, 1, &cmds.handle());
     }
 
     // Read second buffer back and print out values

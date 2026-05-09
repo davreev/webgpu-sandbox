@@ -6,7 +6,6 @@
 
 #include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
-#include <dr/defer.hpp>
 #include <dr/linalg_reshape.hpp>
 #include <dr/math.hpp>
 #include <dr/math_types.hpp>
@@ -18,6 +17,7 @@
 #include "assets.hpp"
 
 #include "../example_app.hpp"
+#include "../gpu_resource.hpp"
 
 namespace wgpu::sandbox
 {
@@ -28,8 +28,8 @@ using App = ExampleApp;
 
 struct RenderPass
 {
-    WGPURenderPassEncoder encoder;
-    WGPUTextureView surface_view;
+    GpuTextureView surface_view;
+    GpuRenderPassEncoder encoder;
 
     static RenderPass begin(
         WGPUCommandEncoder const cmd_encoder,
@@ -45,14 +45,6 @@ struct RenderPass
         assert(result.encoder);
 
         return result;
-    }
-
-    static void end(RenderPass& pass)
-    {
-        wgpuRenderPassEncoderEnd(pass.encoder);
-        wgpuRenderPassEncoderRelease(pass.encoder);
-        wgpuTextureViewRelease(pass.surface_view);
-        pass = {};
     }
 
   private:
@@ -103,8 +95,8 @@ struct RenderPass
 struct DepthTarget
 {
     static constexpr WGPUTextureFormat format = WGPUTextureFormat_Depth32Float;
-    WGPUTexture texture;
-    WGPUTextureView view;
+    GpuTexture texture;
+    GpuTextureView view;
 
     static DepthTarget make(WGPUDevice const device, i32 const width, i32 const height)
     {
@@ -114,16 +106,8 @@ struct DepthTarget
         return result;
     }
 
-    static void release(DepthTarget& target)
-    {
-        wgpuTextureViewRelease(target.view);
-        wgpuTextureRelease(target.texture);
-        target = {};
-    }
-
     void resize(WGPUDevice const device, i32 const width, i32 const height)
     {
-        release(*this);
         *this = make(device, width, height);
     }
 
@@ -160,8 +144,8 @@ struct DepthTarget
 struct RenderMesh
 {
     static constexpr WGPUIndexFormat index_format{WGPUIndexFormat_Uint16};
-    WGPUBuffer vertices;
-    WGPUBuffer indices;
+    GpuBuffer vertices;
+    GpuBuffer indices;
     isize index_count;
 
     static RenderMesh make(
@@ -171,7 +155,6 @@ struct RenderMesh
     {
         RenderMesh result{};
 
-        // Create buffers
         result.vertices = make_buffer(
             device,
             vertex_data.size(),
@@ -184,19 +167,9 @@ struct RenderMesh
             WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
         assert(result.indices);
 
-        auto const unmap = defer([&]() {
-            wgpuBufferUnmap(result.vertices);
-            wgpuBufferUnmap(result.indices);
-        });
-
-        // Copy data to buffers
-        auto const copy_data = [](WGPUBuffer const dst, Span<u8 const> const& src) {
-            void* dst_ptr = wgpuBufferGetMappedRange(dst, 0, src.size());
-            assert(dst_ptr);
-            std::memcpy(dst_ptr, src.data(), src.size());
-        };
-        copy_data(result.vertices, vertex_data);
-        copy_data(result.indices, index_data);
+        WGPUQueue queue = wgpuDeviceGetQueue(device);
+        wgpuQueueWriteBuffer(queue, result.vertices, 0, vertex_data.data(), vertex_data.size());
+        wgpuQueueWriteBuffer(queue, result.indices, 0, index_data.data(), index_data.size());
 
         constexpr i8 index_stride = sizeof(u16);
         result.index_count = index_data.size() / index_stride;
@@ -262,13 +235,6 @@ struct RenderMesh
         return make(device, as<u8>(as_span(vertices)), as<u8>(as_span(faces)));
     }
 
-    static void release(RenderMesh& mesh)
-    {
-        wgpuBufferRelease(mesh.vertices);
-        wgpuBufferRelease(mesh.indices);
-        mesh = {};
-    }
-
     void bind_resources(WGPURenderPassEncoder const encoder)
     {
         wgpuRenderPassEncoderSetVertexBuffer(encoder, 0, vertices, 0, wgpuBufferGetSize(vertices));
@@ -294,7 +260,6 @@ struct RenderMesh
         WGPUBufferDescriptor const desc{
             .usage = usage,
             .size = size,
-            .mappedAtCreation = true,
         };
         return wgpuDeviceCreateBuffer(device, &desc);
     }
@@ -302,24 +267,26 @@ struct RenderMesh
 
 struct RenderMaterial
 {
-    static inline WGPUBindGroupLayout bind_group_layout{};
-    static inline WGPUPipelineLayout pipeline_layout{};
-    static inline WGPURenderPipeline pipeline{};
+    static inline GpuBindGroupLayout bind_group_layout{};
+    static inline GpuPipelineLayout pipeline_layout{};
+    static inline GpuRenderPipeline pipeline{};
     struct
     {
-        WGPUTexture texture;
-        WGPUTextureView view;
-        WGPUSampler sampler;
+        GpuTexture texture;
+        GpuTextureView view;
+        GpuSampler sampler;
     } static inline color_map;
 
-    WGPUBuffer uniform_buffer;
-    WGPUBindGroup bind_group;
+    GpuBuffer uniform_buffer;
+    GpuBindGroup bind_group;
     struct
     {
         f32 local_to_clip[16];
     } uniforms{};
 
-    static void init(WGPUDevice const device, WGPUTextureFormat const surface_format)
+    static void init_shared_resources(
+        WGPUDevice const device,
+        WGPUTextureFormat const surface_format)
     {
         bind_group_layout = make_bind_group_layout(device);
         pipeline_layout = make_pipeline_layout(device, bind_group_layout);
@@ -353,23 +320,6 @@ struct RenderMaterial
         }
     }
 
-    static void deinit()
-    {
-        wgpuTextureViewRelease(color_map.view);
-        wgpuSamplerRelease(color_map.sampler);
-        wgpuTextureRelease(color_map.texture);
-        color_map = {};
-
-        wgpuRenderPipelineRelease(pipeline);
-        pipeline = {};
-
-        wgpuPipelineLayoutRelease(pipeline_layout);
-        pipeline_layout = {};
-
-        wgpuBindGroupLayoutRelease(bind_group_layout);
-        bind_group_layout = {};
-    }
-
     static RenderMaterial make(WGPUDevice const device)
     {
         RenderMaterial result{};
@@ -381,18 +331,8 @@ struct RenderMaterial
         return result;
     }
 
-    static void release(RenderMaterial& material)
-    {
-        wgpuBufferRelease(material.uniform_buffer);
-        wgpuBindGroupRelease(material.bind_group);
-        material = {};
-    }
-
     void update_bind_group(WGPUDevice const device)
     {
-        if (bind_group)
-            wgpuBindGroupRelease(bind_group);
-
         bind_group = make_bind_group(
             device,
             bind_group_layout,
@@ -482,8 +422,7 @@ struct RenderMaterial
         WGPUShaderModuleDescriptor const shader_desc{
             .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
         };
-        WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
-        auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+        GpuShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
 
         WGPUVertexAttribute const vert_attrs[]{
             {
@@ -503,13 +442,11 @@ struct RenderMaterial
             .attributeCount = size(vert_attrs),
             .attributes = vert_attrs,
         };
-
         WGPUDepthStencilState const depth_state{
             .format = depth_format,
             .depthWriteEnabled = WGPUOptionalBool_True,
             .depthCompare = WGPUCompareFunction_LessEqual,
         };
-
         WGPUColorTargetState const color_targ{
             .format = surface_format,
             .writeMask = WGPUColorWriteMask_All,
@@ -520,7 +457,6 @@ struct RenderMaterial
             .targetCount = 1,
             .targets = &color_targ,
         };
-
         WGPURenderPipelineDescriptor const pipe_desc{
             .layout = layout,
             .vertex{
@@ -542,7 +478,6 @@ struct RenderMaterial
             },
             .fragment = &frag_state,
         };
-
         return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
     }
 
@@ -552,8 +487,8 @@ struct RenderMaterial
         uint32_t const width,
         uint32_t const height,
         uint32_t const stride,
-        WGPUTextureView& view,
-        WGPUSampler& sampler)
+        GpuTextureView& view,
+        GpuSampler& sampler)
     {
         WGPUTextureFormat const format = WGPUTextureFormat_RGBA8Unorm;
         WGPUExtent3D const size = {width, height, 1};
@@ -632,7 +567,6 @@ struct RenderMaterial
                 .size = wgpuBufferGetSize(uniforms),
             },
         };
-
         WGPUBindGroupDescriptor const bg_desc{
             .layout = layout,
             .entryCount = size(entries),
@@ -663,19 +597,11 @@ void init()
     state.depth = DepthTarget::make(App::gpu().device, fb_width, fb_height);
 
     // Init materials and create instance
-    RenderMaterial::init(App::gpu().device, default_surface_format);
+    RenderMaterial::init_shared_resources(App::gpu().device, default_surface_format);
     state.material = RenderMaterial::make(App::gpu().device);
 
     // Create mesh
     state.geometry = RenderMesh::make_box(App::gpu().device);
-}
-
-void deinit()
-{
-    RenderMesh::release(state.geometry);
-    RenderMaterial::release(state.material);
-    DepthTarget::release(state.depth);
-    state = {};
 }
 
 f32 get_window_aspect()
@@ -720,18 +646,16 @@ Mat4<f32> make_view_to_clip()
 void update()
 {
     // Create a command encoder from the device
-    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
+    GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
         App::gpu().device,
         nullptr);
     assert(cmd_encoder);
-    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
     WGPUQueue const queue = wgpuDeviceGetQueue(App::gpu().device);
 
     // Render pass
     {
         RenderPass pass = RenderPass::begin(cmd_encoder, App::gpu().surface, state.depth.view);
-        auto const end_pass = defer([&]() { RenderPass::end(pass); });
 
         auto& mat = state.material;
         mat.apply_pipeline(pass.encoder);
@@ -752,12 +676,11 @@ void update()
     }
 
     // Create encoded commands
-    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    GpuCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
     assert(cmds);
-    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
     // Submit encoded commands
-    wgpuQueueSubmit(queue, 1, &cmds);
+    wgpuQueueSubmit(queue, 1, &cmds.handle());
 }
 
 void handle_event(App::Event const& e)
@@ -780,7 +703,6 @@ int main(int /*argc*/, char** /*argv*/)
     App::run({
         .init_cb = init,
         .frame_cb = update,
-        .deinit_cb = deinit,
         .event_cb = handle_event,
         .window{
             .title = "WebGPU Sandbox: Textured Mesh",

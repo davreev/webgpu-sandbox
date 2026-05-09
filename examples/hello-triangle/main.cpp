@@ -5,12 +5,12 @@
 #include <webgpu/webgpu.h>
 
 #include <dr/basic_types.hpp>
-#include <dr/defer.hpp>
 #include <dr/memory.hpp>
 
 #include <dr/app/file_utils.hpp>
 
 #include "../example_app.hpp"
+#include "../gpu_resource.hpp"
 
 namespace wgpu::sandbox
 {
@@ -21,10 +21,10 @@ using App = ExampleApp;
 
 struct RenderPass
 {
-    WGPURenderPassEncoder encoder;
-    WGPUTextureView surface_view;
+    GpuTextureView surface_view;
+    GpuRenderPassEncoder encoder;
 
-    static RenderPass begin(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
+    static RenderPass make(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
     {
         RenderPass result{};
 
@@ -35,14 +35,6 @@ struct RenderPass
         assert(result.encoder);
 
         return result;
-    }
-
-    static void end(RenderPass& pass)
-    {
-        wgpuRenderPassEncoderEnd(pass.encoder);
-        wgpuRenderPassEncoderRelease(pass.encoder);
-        wgpuTextureViewRelease(pass.surface_view);
-        pass = {};
     }
 
   private:
@@ -82,7 +74,7 @@ struct RenderPass
 
 struct
 {
-    WGPURenderPipeline pipeline{};
+    GpuRenderPipeline pipeline{};
     // ...
     // ...
     // ...
@@ -100,8 +92,7 @@ WGPURenderPipeline make_render_pipeline(
     WGPUShaderModuleDescriptor const shader_desc{
         .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
     };
-    WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
-    auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+    GpuShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
 
     WGPUColorTargetState const color_targ{
         .format = color_format,
@@ -134,7 +125,6 @@ WGPURenderPipeline make_render_pipeline(
         },
         .fragment = &frag_state,
     };
-
     return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
 }
 
@@ -156,33 +146,24 @@ void update()
     GpuContext const& gpu = App::gpu();
 
     // Create a command encoder from the device
-    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
+    GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
     assert(cmd_encoder);
-    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
     // Render pass
     {
-        RenderPass pass = RenderPass::begin(cmd_encoder, gpu.surface);
-        auto const end_pass = defer([&]() { RenderPass::end(pass); });
+        RenderPass pass = RenderPass::make(cmd_encoder, gpu.surface);
 
         wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
         wgpuRenderPassEncoderDraw(pass.encoder, 3, 1, 0, 0);
     }
 
     // Create encoded commands
-    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    GpuCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
     assert(cmds);
-    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
     // Submit encoded commands
     WGPUQueue const queue = wgpuDeviceGetQueue(gpu.device);
-    wgpuQueueSubmit(queue, 1, &cmds);
-}
-
-void deinit()
-{
-    wgpuRenderPipelineRelease(state.pipeline);
-    state = {};
+    wgpuQueueSubmit(queue, 1, &cmds.handle());
 }
 
 } // namespace
@@ -195,7 +176,6 @@ int main(int /*argc*/, char** /*argv*/)
     App::run({
         .init_cb = init,
         .frame_cb = update,
-        .deinit_cb = deinit,
         .window{
             .title = "WebGPU Sandbox: Hello Triangle",
             .width = 800,

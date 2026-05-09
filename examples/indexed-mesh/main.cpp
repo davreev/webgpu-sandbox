@@ -6,13 +6,13 @@
 
 #include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
-#include <dr/defer.hpp>
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
 
 #include "shader_src.hpp"
 
 #include "../example_app.hpp"
+#include "../gpu_resource.hpp"
 
 namespace wgpu::sandbox
 {
@@ -23,10 +23,10 @@ using App = ExampleApp;
 
 struct RenderPass
 {
-    WGPURenderPassEncoder encoder;
-    WGPUTextureView surface_view;
+    GpuTextureView surface_view;
+    GpuRenderPassEncoder encoder;
 
-    static RenderPass begin(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
+    static RenderPass make(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
     {
         RenderPass result{};
 
@@ -37,14 +37,6 @@ struct RenderPass
         assert(result.encoder);
 
         return result;
-    }
-
-    static void end(RenderPass& pass)
-    {
-        wgpuRenderPassEncoderEnd(pass.encoder);
-        wgpuRenderPassEncoderRelease(pass.encoder);
-        wgpuTextureViewRelease(pass.surface_view);
-        pass = {};
     }
 
   private:
@@ -85,8 +77,8 @@ struct RenderPass
 struct RenderMesh
 {
     static constexpr WGPUIndexFormat index_format{WGPUIndexFormat_Uint16};
-    WGPUBuffer vertices;
-    WGPUBuffer indices;
+    GpuBuffer vertices;
+    GpuBuffer indices;
     isize index_count;
 
     static RenderMesh make(
@@ -96,7 +88,6 @@ struct RenderMesh
     {
         RenderMesh result{};
 
-        // Create buffers
         result.vertices = make_buffer(
             device,
             vertex_data.size(),
@@ -109,19 +100,9 @@ struct RenderMesh
             WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst);
         assert(result.indices);
 
-        auto const unmap = defer([&]() {
-            wgpuBufferUnmap(result.vertices);
-            wgpuBufferUnmap(result.indices);
-        });
-
-        // Copy data to buffers
-        auto const copy_data = [](WGPUBuffer const dst, Span<u8 const> const& src) {
-            void* dst_ptr = wgpuBufferGetMappedRange(dst, 0, src.size());
-            assert(dst_ptr);
-            std::memcpy(dst_ptr, src.data(), src.size());
-        };
-        copy_data(result.vertices, vertex_data);
-        copy_data(result.indices, index_data);
+        WGPUQueue queue = wgpuDeviceGetQueue(device);
+        wgpuQueueWriteBuffer(queue, result.vertices, 0, vertex_data.data(), vertex_data.size());
+        wgpuQueueWriteBuffer(queue, result.indices, 0, index_data.data(), index_data.size());
 
         constexpr i8 index_stride = sizeof(u16);
         result.index_count = index_data.size() / index_stride;
@@ -145,13 +126,6 @@ struct RenderMesh
         };
 
         return make(device, as<u8>(as_span(vertices)), as<u8>(as_span(faces)));
-    }
-
-    static void release(RenderMesh& mesh)
-    {
-        wgpuBufferRelease(mesh.vertices);
-        wgpuBufferRelease(mesh.indices);
-        mesh = {};
     }
 
     void bind_resources(WGPURenderPassEncoder const encoder)
@@ -179,7 +153,6 @@ struct RenderMesh
         WGPUBufferDescriptor const desc{
             .usage = usage,
             .size = size,
-            .mappedAtCreation = true,
         };
         return wgpuDeviceCreateBuffer(device, &desc);
     }
@@ -187,7 +160,7 @@ struct RenderMesh
 
 struct
 {
-    WGPURenderPipeline pipeline{};
+    GpuRenderPipeline pipeline;
     RenderMesh geometry;
 } state;
 
@@ -203,8 +176,7 @@ WGPURenderPipeline make_render_pipeline(
     WGPUShaderModuleDescriptor const shader_desc{
         .nextInChain = as<WGPUChainedStruct>(&shader_desc_src),
     };
-    WGPUShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
-    auto const drop_shader = defer([=]() { wgpuShaderModuleRelease(shader); });
+    GpuShaderModule const shader = wgpuDeviceCreateShaderModule(device, &shader_desc);
 
     WGPUVertexAttribute const vert_attrs[]{
         {
@@ -224,7 +196,6 @@ WGPURenderPipeline make_render_pipeline(
         .attributeCount = size(vert_attrs),
         .attributes = vert_attrs,
     };
-
     WGPUColorTargetState const color_targ{
         .format = color_format,
         .writeMask = WGPUColorWriteMask_All,
@@ -254,56 +225,42 @@ WGPURenderPipeline make_render_pipeline(
         },
         .fragment = &frag_state,
     };
-
     return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
 }
 
 void init()
 {
-    // Create render pipeline
     state.pipeline = make_render_pipeline(
         App::gpu().device,
         {shader_src, WGPU_STRLEN},
         default_surface_format);
 
-    // Create geometry
     state.geometry = RenderMesh::make_quad(App::gpu().device);
-}
-
-void deinit()
-{
-    RenderMesh::release(state.geometry);
-    wgpuRenderPipelineRelease(state.pipeline);
-    state = {};
 }
 
 void update()
 {
     // Create a command encoder from the device
-    WGPUCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
+    GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(
         App::gpu().device,
         nullptr);
     assert(cmd_encoder);
-    auto const drop_cmd_encoder = defer([=]() { wgpuCommandEncoderRelease(cmd_encoder); });
 
     // Render pass
     {
-        RenderPass pass = RenderPass::begin(cmd_encoder, App::gpu().surface);
-        auto const end_pass = defer([&]() { RenderPass::end(pass); });
-
+        RenderPass pass = RenderPass::make(cmd_encoder, App::gpu().surface);
         wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
         state.geometry.bind_resources(pass.encoder);
         state.geometry.dispatch_draw(pass.encoder);
     }
 
     // Create encoded commands
-    WGPUCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
+    GpuCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
     assert(cmds);
-    auto const drop_cmds = defer([=]() { wgpuCommandBufferRelease(cmds); });
 
     // Submit encoded commands
     WGPUQueue const queue = wgpuDeviceGetQueue(App::gpu().device);
-    wgpuQueueSubmit(queue, 1, &cmds);
+    wgpuQueueSubmit(queue, 1, &cmds.handle());
 }
 
 } // namespace
@@ -316,7 +273,6 @@ int main(int /*argc*/, char** /*argv*/)
     App::run({
         .init_cb = init,
         .frame_cb = update,
-        .deinit_cb = deinit,
         .window{
             .title = "WebGPU Sandbox: Indexed Mesh",
             .width = 800,
