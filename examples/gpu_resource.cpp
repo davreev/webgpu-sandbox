@@ -3,366 +3,86 @@
 namespace wgpu::sandbox
 {
 
-template <>
-void GpuAdapter::release()
-{
-    if (handle_)
-    {
-        wgpuAdapterRelease(handle_);
-        handle_ = {};
+#define GPU_RESOURCE_RELEASE(Type_)                                                                \
+    template <>                                                                                    \
+    void Gpu##Type_::release()                                                                     \
+    {                                                                                              \
+        if (handle_)                                                                               \
+        {                                                                                          \
+            wgpu##Type_##Release(handle_);                                                         \
+            handle_ = {};                                                                          \
+        }                                                                                          \
     }
-}
 
-template <>
-void GpuAdapter::add_ref() const
-{
-    if (handle_)
-        wgpuAdapterAddRef(handle_);
-}
+GPU_RESOURCE_RELEASE(Adapter)
+GPU_RESOURCE_RELEASE(BindGroup)
+GPU_RESOURCE_RELEASE(BindGroupLayout)
+GPU_RESOURCE_RELEASE(Buffer)
+GPU_RESOURCE_RELEASE(CommandBuffer)
+GPU_RESOURCE_RELEASE(CommandEncoder)
+GPU_RESOURCE_RELEASE(ComputePipeline)
+GPU_RESOURCE_RELEASE(Device)
+GPU_RESOURCE_RELEASE(Instance)
+GPU_RESOURCE_RELEASE(PipelineLayout)
+GPU_RESOURCE_RELEASE(QuerySet)
+GPU_RESOURCE_RELEASE(Queue)
+GPU_RESOURCE_RELEASE(RenderBundle)
+GPU_RESOURCE_RELEASE(RenderBundleEncoder)
+GPU_RESOURCE_RELEASE(RenderPipeline)
+GPU_RESOURCE_RELEASE(Sampler)
+GPU_RESOURCE_RELEASE(ShaderModule)
+GPU_RESOURCE_RELEASE(Surface)
+GPU_RESOURCE_RELEASE(Texture)
+GPU_RESOURCE_RELEASE(TextureView)
 
-template <>
-void GpuBindGroup::release()
-{
-    if (handle_)
-    {
-        wgpuBindGroupRelease(handle_);
-        handle_ = {};
+#undef GPU_RESOURCE_RELEASE
+
+#define GPU_RESOURCE_ADD_REF(Type_)                                                                \
+    template <>                                                                                    \
+    void Gpu##Type_::add_ref() const                                                               \
+    {                                                                                              \
+        if (handle_)                                                                               \
+            wgpu##Type_##AddRef(handle_);                                                          \
     }
-}
 
-template <>
-void GpuBindGroup::add_ref() const
-{
-    if (handle_)
-        wgpuBindGroupAddRef(handle_);
-}
+GPU_RESOURCE_ADD_REF(Adapter)
+GPU_RESOURCE_ADD_REF(BindGroup)
+GPU_RESOURCE_ADD_REF(BindGroupLayout)
+GPU_RESOURCE_ADD_REF(Buffer)
+GPU_RESOURCE_ADD_REF(CommandBuffer)
+GPU_RESOURCE_ADD_REF(CommandEncoder)
+GPU_RESOURCE_ADD_REF(ComputePipeline)
+GPU_RESOURCE_ADD_REF(Device)
+GPU_RESOURCE_ADD_REF(Instance)
+GPU_RESOURCE_ADD_REF(PipelineLayout)
+GPU_RESOURCE_ADD_REF(QuerySet)
+GPU_RESOURCE_ADD_REF(Queue)
+GPU_RESOURCE_ADD_REF(RenderBundle)
+GPU_RESOURCE_ADD_REF(RenderBundleEncoder)
+GPU_RESOURCE_ADD_REF(RenderPipeline)
+GPU_RESOURCE_ADD_REF(Sampler)
+GPU_RESOURCE_ADD_REF(ShaderModule)
+GPU_RESOURCE_ADD_REF(Surface)
+GPU_RESOURCE_ADD_REF(Texture)
+GPU_RESOURCE_ADD_REF(TextureView)
 
-template <>
-void GpuBindGroupLayout::release()
-{
-    if (handle_)
-    {
-        wgpuBindGroupLayoutRelease(handle_);
-        handle_ = {};
+#undef GPU_RESOURCE_ADD_REF
+
+#define GPU_PASS_ENCODER_RELEASE(Type_)                                                            \
+    template <>                                                                                    \
+    void Gpu##Type_::release()                                                                     \
+    {                                                                                              \
+        if (handle_)                                                                               \
+        {                                                                                          \
+            wgpu##Type_##End(handle_);                                                             \
+            wgpu##Type_##Release(handle_);                                                         \
+            handle_ = {};                                                                          \
+        }                                                                                          \
     }
-}
 
-template <>
-void GpuBindGroupLayout::add_ref() const
-{
-    if (handle_)
-        wgpuBindGroupLayoutAddRef(handle_);
-}
+GPU_PASS_ENCODER_RELEASE(RenderPassEncoder)
+GPU_PASS_ENCODER_RELEASE(ComputePassEncoder)
 
-template <>
-void GpuBuffer::release()
-{
-    if (handle_)
-    {
-        wgpuBufferRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuBuffer::add_ref() const
-{
-    if (handle_)
-        wgpuBufferAddRef(handle_);
-}
-
-template <>
-void GpuCommandBuffer::release()
-{
-    if (handle_)
-    {
-        wgpuCommandBufferRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuCommandBuffer::add_ref() const
-{
-    if (handle_)
-        wgpuCommandBufferAddRef(handle_);
-}
-
-template <>
-void GpuCommandEncoder::release()
-{
-    if (handle_)
-    {
-        wgpuCommandEncoderRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuCommandEncoder::add_ref() const
-{
-    if (handle_)
-        wgpuCommandEncoderAddRef(handle_);
-}
-
-template <>
-void GpuComputePipeline::release()
-{
-    if (handle_)
-    {
-        wgpuComputePipelineRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuComputePipeline::add_ref() const
-{
-    if (handle_)
-        wgpuComputePipelineAddRef(handle_);
-}
-
-template <>
-void GpuDevice::release()
-{
-    if (handle_)
-    {
-        wgpuDeviceRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuDevice::add_ref() const
-{
-    if (handle_)
-        wgpuDeviceAddRef(handle_);
-}
-
-template <>
-void GpuInstance::release()
-{
-    if (handle_)
-    {
-        wgpuInstanceRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuInstance::add_ref() const
-{
-    if (handle_)
-        wgpuInstanceAddRef(handle_);
-}
-
-template <>
-void GpuPipelineLayout::release()
-{
-    if (handle_)
-    {
-        wgpuPipelineLayoutRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuPipelineLayout::add_ref() const
-{
-    if (handle_)
-        wgpuPipelineLayoutAddRef(handle_);
-}
-
-template <>
-void GpuQuerySet::release()
-{
-    if (handle_)
-    {
-        wgpuQuerySetRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuQuerySet::add_ref() const
-{
-    if (handle_)
-        wgpuQuerySetAddRef(handle_);
-}
-
-template <>
-void GpuQueue::release()
-{
-    if (handle_)
-    {
-        wgpuQueueRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuQueue::add_ref() const
-{
-    if (handle_)
-        wgpuQueueAddRef(handle_);
-}
-
-template <>
-void GpuRenderBundle::release()
-{
-    if (handle_)
-    {
-        wgpuRenderBundleRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuRenderBundle::add_ref() const
-{
-    if (handle_)
-        wgpuRenderBundleAddRef(handle_);
-}
-
-template <>
-void GpuRenderBundleEncoder::release()
-{
-    if (handle_)
-    {
-        wgpuRenderBundleEncoderRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuRenderBundleEncoder::add_ref() const
-{
-    if (handle_)
-        wgpuRenderBundleEncoderAddRef(handle_);
-}
-
-template <>
-void GpuRenderPipeline::release()
-{
-    if (handle_)
-    {
-        wgpuRenderPipelineRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuRenderPipeline::add_ref() const
-{
-    if (handle_)
-        wgpuRenderPipelineAddRef(handle_);
-}
-
-template <>
-void GpuSampler::release()
-{
-    if (handle_)
-    {
-        wgpuSamplerRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuSampler::add_ref() const
-{
-    if (handle_)
-        wgpuSamplerAddRef(handle_);
-}
-
-template <>
-void GpuShaderModule::release()
-{
-    if (handle_)
-    {
-        wgpuShaderModuleRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuShaderModule::add_ref() const
-{
-    if (handle_)
-        wgpuShaderModuleAddRef(handle_);
-}
-
-template <>
-void GpuSurface::release()
-{
-    if (handle_)
-    {
-        wgpuSurfaceRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuSurface::add_ref() const
-{
-    if (handle_)
-        wgpuSurfaceAddRef(handle_);
-}
-
-template <>
-void GpuTexture::release()
-{
-    if (handle_)
-    {
-        wgpuTextureRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuTexture::add_ref() const
-{
-    if (handle_)
-        wgpuTextureAddRef(handle_);
-}
-
-template <>
-void GpuTextureView::release()
-{
-    if (handle_)
-    {
-        wgpuTextureViewRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuTextureView::add_ref() const
-{
-    if (handle_)
-        wgpuTextureViewAddRef(handle_);
-}
-
-template <>
-void GpuRenderPassEncoder::release()
-{
-    if (handle_)
-    {
-        wgpuRenderPassEncoderEnd(handle_);
-        wgpuRenderPassEncoderRelease(handle_);
-        handle_ = {};
-    }
-}
-
-template <>
-void GpuComputePassEncoder::release()
-{
-    if (handle_)
-    {
-        wgpuComputePassEncoderEnd(handle_);
-        wgpuComputePassEncoderRelease(handle_);
-        handle_ = {};
-    }
-}
+#undef GPU_PASS_ENCODER_RELEASE
 
 } // namespace wgpu::sandbox
