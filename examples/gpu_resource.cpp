@@ -1,88 +1,124 @@
 #include "gpu_resource.hpp"
+#include "webgpu/webgpu.h"
 
 namespace wgpu::sandbox
 {
+namespace
+{
 
-#define GPU_RESOURCE_RELEASE(Type_)                                                                \
+template <typename Handle>
+void wgpu_resource_release(Handle handle);
+
+template <typename Handle>
+void wgpu_resource_add_ref(Handle handle);
+
+template <typename Handle>
+void wgpu_pass_encoder_end(Handle handle);
+
+#define WGPU_RESOURCE_IMPL(name_)                                                                  \
     template <>                                                                                    \
-    void Gpu##Type_::release()                                                                     \
+    void wgpu_resource_release<WGPU##name_>(WGPU##name_ h)                                         \
     {                                                                                              \
-        if (handle_)                                                                               \
-        {                                                                                          \
-            wgpu##Type_##Release(handle_);                                                         \
-            handle_ = {};                                                                          \
-        }                                                                                          \
+        wgpu##name_##Release(h);                                                                   \
+    }                                                                                              \
+    template <>                                                                                    \
+    void wgpu_resource_add_ref<WGPU##name_>(WGPU##name_ h)                                         \
+    {                                                                                              \
+        wgpu##name_##AddRef(h);                                                                    \
     }
 
-GPU_RESOURCE_RELEASE(Adapter)
-GPU_RESOURCE_RELEASE(BindGroup)
-GPU_RESOURCE_RELEASE(BindGroupLayout)
-GPU_RESOURCE_RELEASE(Buffer)
-GPU_RESOURCE_RELEASE(CommandBuffer)
-GPU_RESOURCE_RELEASE(CommandEncoder)
-GPU_RESOURCE_RELEASE(ComputePipeline)
-GPU_RESOURCE_RELEASE(Device)
-GPU_RESOURCE_RELEASE(Instance)
-GPU_RESOURCE_RELEASE(PipelineLayout)
-GPU_RESOURCE_RELEASE(QuerySet)
-GPU_RESOURCE_RELEASE(Queue)
-GPU_RESOURCE_RELEASE(RenderBundle)
-GPU_RESOURCE_RELEASE(RenderBundleEncoder)
-GPU_RESOURCE_RELEASE(RenderPipeline)
-GPU_RESOURCE_RELEASE(Sampler)
-GPU_RESOURCE_RELEASE(ShaderModule)
-GPU_RESOURCE_RELEASE(Surface)
-GPU_RESOURCE_RELEASE(Texture)
-GPU_RESOURCE_RELEASE(TextureView)
+WGPU_RESOURCE_IMPL(Adapter)
+WGPU_RESOURCE_IMPL(BindGroup)
+WGPU_RESOURCE_IMPL(BindGroupLayout)
+WGPU_RESOURCE_IMPL(Buffer)
+WGPU_RESOURCE_IMPL(CommandBuffer)
+WGPU_RESOURCE_IMPL(CommandEncoder)
+WGPU_RESOURCE_IMPL(ComputePipeline)
+WGPU_RESOURCE_IMPL(Device)
+WGPU_RESOURCE_IMPL(Instance)
+WGPU_RESOURCE_IMPL(PipelineLayout)
+WGPU_RESOURCE_IMPL(QuerySet)
+WGPU_RESOURCE_IMPL(Queue)
+WGPU_RESOURCE_IMPL(RenderBundle)
+WGPU_RESOURCE_IMPL(RenderBundleEncoder)
+WGPU_RESOURCE_IMPL(RenderPipeline)
+WGPU_RESOURCE_IMPL(Sampler)
+WGPU_RESOURCE_IMPL(ShaderModule)
+WGPU_RESOURCE_IMPL(Surface)
+WGPU_RESOURCE_IMPL(Texture)
+WGPU_RESOURCE_IMPL(TextureView)
 
-#undef GPU_RESOURCE_RELEASE
+#undef WGPU_RESOURCE_IMPL
 
-#define GPU_RESOURCE_ADD_REF(Type_)                                                                \
+#define WGPU_PASS_ENCODER_IMPL(name_)                                                              \
     template <>                                                                                    \
-    void Gpu##Type_::add_ref() const                                                               \
+    void wgpu_resource_release<WGPU##name_>(WGPU##name_ h)                                         \
     {                                                                                              \
-        if (handle_)                                                                               \
-            wgpu##Type_##AddRef(handle_);                                                          \
+        wgpu##name_##Release(h);                                                                   \
+    }                                                                                              \
+    template <>                                                                                    \
+    void wgpu_pass_encoder_end(WGPU##name_ h)                                                      \
+    {                                                                                              \
+        wgpu##name_##End(h);                                                                       \
     }
 
-GPU_RESOURCE_ADD_REF(Adapter)
-GPU_RESOURCE_ADD_REF(BindGroup)
-GPU_RESOURCE_ADD_REF(BindGroupLayout)
-GPU_RESOURCE_ADD_REF(Buffer)
-GPU_RESOURCE_ADD_REF(CommandBuffer)
-GPU_RESOURCE_ADD_REF(CommandEncoder)
-GPU_RESOURCE_ADD_REF(ComputePipeline)
-GPU_RESOURCE_ADD_REF(Device)
-GPU_RESOURCE_ADD_REF(Instance)
-GPU_RESOURCE_ADD_REF(PipelineLayout)
-GPU_RESOURCE_ADD_REF(QuerySet)
-GPU_RESOURCE_ADD_REF(Queue)
-GPU_RESOURCE_ADD_REF(RenderBundle)
-GPU_RESOURCE_ADD_REF(RenderBundleEncoder)
-GPU_RESOURCE_ADD_REF(RenderPipeline)
-GPU_RESOURCE_ADD_REF(Sampler)
-GPU_RESOURCE_ADD_REF(ShaderModule)
-GPU_RESOURCE_ADD_REF(Surface)
-GPU_RESOURCE_ADD_REF(Texture)
-GPU_RESOURCE_ADD_REF(TextureView)
+WGPU_PASS_ENCODER_IMPL(RenderPassEncoder)
+WGPU_PASS_ENCODER_IMPL(ComputePassEncoder)
 
-#undef GPU_RESOURCE_ADD_REF
+#undef WGPU_PASS_ENCODER_IMPL
 
-#define GPU_PASS_ENCODER_RELEASE(Type_)                                                            \
-    template <>                                                                                    \
-    void Gpu##Type_::release()                                                                     \
-    {                                                                                              \
-        if (handle_)                                                                               \
-        {                                                                                          \
-            wgpu##Type_##End(handle_);                                                             \
-            wgpu##Type_##Release(handle_);                                                         \
-            handle_ = {};                                                                          \
-        }                                                                                          \
+} // namespace
+
+template <typename Handle>
+void GpuResource<Handle>::release()
+{
+    if (handle_)
+    {
+        wgpu_resource_release(handle_);
+        handle_ = {};
     }
+}
 
-GPU_PASS_ENCODER_RELEASE(RenderPassEncoder)
-GPU_PASS_ENCODER_RELEASE(ComputePassEncoder)
+template <typename Handle>
+void GpuResource<Handle>::add_ref() const
+{
+    if (handle_)
+        wgpu_resource_add_ref(handle_);
+}
 
-#undef GPU_PASS_ENCODER_RELEASE
+template struct GpuResource<WGPUAdapter>;
+template struct GpuResource<WGPUBindGroup>;
+template struct GpuResource<WGPUBindGroupLayout>;
+template struct GpuResource<WGPUBuffer>;
+template struct GpuResource<WGPUCommandBuffer>;
+template struct GpuResource<WGPUCommandEncoder>;
+template struct GpuResource<WGPUComputePipeline>;
+template struct GpuResource<WGPUDevice>;
+template struct GpuResource<WGPUInstance>;
+template struct GpuResource<WGPUPipelineLayout>;
+template struct GpuResource<WGPUQuerySet>;
+template struct GpuResource<WGPUQueue>;
+template struct GpuResource<WGPURenderBundle>;
+template struct GpuResource<WGPURenderBundleEncoder>;
+template struct GpuResource<WGPURenderPipeline>;
+template struct GpuResource<WGPUSampler>;
+template struct GpuResource<WGPUShaderModule>;
+template struct GpuResource<WGPUSurface>;
+template struct GpuResource<WGPUTexture>;
+template struct GpuResource<WGPUTextureView>;
+
+template <typename Handle>
+void GpuPassEncoder<Handle>::release()
+{
+    if (handle_)
+    {
+        wgpu_pass_encoder_end(handle_);
+        wgpu_resource_release(handle_);
+        handle_ = {};
+    }
+}
+
+template struct GpuPassEncoder<WGPURenderPassEncoder>;
+template struct GpuPassEncoder<WGPUComputePassEncoder>;
 
 } // namespace wgpu::sandbox
