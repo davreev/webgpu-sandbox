@@ -20,6 +20,14 @@ list(
 # Show FetchContent download progress
 set(FETCHCONTENT_QUIET FALSE)
 
+# Suppress developer warnings
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 OLD)
+endif()
+
 #
 # Target config
 #

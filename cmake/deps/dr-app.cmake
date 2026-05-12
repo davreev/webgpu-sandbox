@@ -7,7 +7,7 @@ include(FetchContent)
 FetchContent_Declare(
     dr-app
     GIT_REPOSITORY https://github.com/davreev/dr-app.git
-    GIT_TAG 3c1a88be3675af8f37e628719190536eb9362c2e
+    GIT_TAG 58bbfb8a2726d1c34cd738e390f03770e7c1a623
 )
 
 set(DR_APP_UTIL_ONLY ON)
