@@ -5,6 +5,7 @@ add_library(
     geometry_stream.cpp
     gpu_context.cpp
     gpu_resource.cpp
+    surface_render_pass.cpp
 )
 
 include(deps/dr-app)

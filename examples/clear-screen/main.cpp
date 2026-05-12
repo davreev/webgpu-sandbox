@@ -6,6 +6,7 @@
 
 #include "../example_app.hpp"
 #include "../gpu_resource.hpp"
+#include "../surface_render_pass.hpp"
 
 namespace wgpu::sandbox
 {
@@ -13,59 +14,6 @@ namespace
 {
 
 using App = ExampleApp;
-
-struct RenderPass
-{
-    GpuTextureView surface_view;
-    GpuRenderPassEncoder encoder;
-
-    static RenderPass make(WGPUCommandEncoder const cmd_encoder, WGPUSurface const surface)
-    {
-        RenderPass result{};
-
-        result.surface_view = make_view(surface);
-        assert(result.surface_view);
-
-        result.encoder = begin(cmd_encoder, result.surface_view);
-        assert(result.encoder);
-
-        return result;
-    }
-
-  private:
-    static WGPUTextureView make_view(WGPUSurface const surface)
-    {
-        WGPUSurfaceTexture srf_tex;
-        wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
-        assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal);
-
-        WGPUTextureViewDescriptor const desc{
-            .mipLevelCount = 1,
-            .arrayLayerCount = 1,
-        };
-        return wgpuTextureCreateView(srf_tex.texture, &desc);
-    }
-
-    static WGPURenderPassEncoder begin(
-        WGPUCommandEncoder const encoder,
-        WGPUTextureView const surface_view)
-    {
-        WGPURenderPassColorAttachment color_atts[]{
-            {
-                .view = surface_view,
-                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-                .loadOp = WGPULoadOp_Clear,
-                .storeOp = WGPUStoreOp_Store,
-                .clearValue{1.0, 0.0, 0.5, 1.0},
-            },
-        };
-        WGPURenderPassDescriptor const desc{
-            .colorAttachmentCount = 1,
-            .colorAttachments = color_atts,
-        };
-        return wgpuCommandEncoderBeginRenderPass(encoder, &desc);
-    }
-};
 
 void update()
 {
@@ -77,7 +25,7 @@ void update()
 
     // Render pass
     {
-        RenderPass pass = RenderPass::make(cmd_encoder, gpu.surface);
+        SurfaceRenderPass pass{cmd_encoder, gpu.surface, {1.0, 0.0, 0.5, 1.0}};
 
         // NOTE(dr): Render pass clears the screen by default
     }

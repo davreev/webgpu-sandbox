@@ -18,6 +18,7 @@
 
 #include "../example_app.hpp"
 #include "../gpu_resource.hpp"
+#include "../surface_render_pass.hpp"
 
 namespace wgpu::sandbox
 {
@@ -25,72 +26,6 @@ namespace
 {
 
 using App = ExampleApp;
-
-struct RenderPass
-{
-    GpuTextureView surface_view;
-    GpuRenderPassEncoder encoder;
-
-    static RenderPass begin(
-        WGPUCommandEncoder const cmd_encoder,
-        WGPUSurface const surface,
-        WGPUTextureView const depth)
-    {
-        RenderPass result{};
-
-        result.surface_view = make_view(surface);
-        assert(result.surface_view);
-
-        result.encoder = begin(cmd_encoder, result.surface_view, depth);
-        assert(result.encoder);
-
-        return result;
-    }
-
-  private:
-    static WGPUTextureView make_view(WGPUSurface const surface)
-    {
-        WGPUSurfaceTexture srf_tex;
-        wgpuSurfaceGetCurrentTexture(surface, &srf_tex);
-        assert(srf_tex.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal);
-
-        WGPUTextureViewDescriptor const desc{
-            .mipLevelCount = 1,
-            .arrayLayerCount = 1,
-        };
-        return wgpuTextureCreateView(srf_tex.texture, &desc);
-    }
-
-    static WGPURenderPassEncoder begin(
-        WGPUCommandEncoder const encoder,
-        WGPUTextureView const surface_view,
-        WGPUTextureView const depth_view)
-    {
-        WGPURenderPassColorAttachment color_atts[]{
-            {
-                .view = surface_view,
-                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-                .loadOp = WGPULoadOp_Clear,
-                .storeOp = WGPUStoreOp_Store,
-                .clearValue{0.15, 0.15, 0.15, 1.0},
-            },
-        };
-        WGPURenderPassDepthStencilAttachment depth_atts[]{
-            {
-                .view = depth_view,
-                .depthLoadOp = WGPULoadOp_Clear,
-                .depthStoreOp = WGPUStoreOp_Store,
-                .depthClearValue = 1.0f,
-            },
-        };
-        WGPURenderPassDescriptor const desc{
-            .colorAttachmentCount = 1,
-            .colorAttachments = color_atts,
-            .depthStencilAttachment = depth_atts,
-        };
-        return wgpuCommandEncoderBeginRenderPass(encoder, &desc);
-    }
-};
 
 struct DepthTarget
 {
@@ -655,7 +590,11 @@ void update()
 
     // Render pass
     {
-        RenderPass pass = RenderPass::begin(cmd_encoder, App::gpu().surface, state.depth.view);
+        SurfaceRenderPass pass{
+            cmd_encoder,
+            App::gpu().surface,
+            {0.15, 0.15, 0.15, 1.0},
+            state.depth.view};
 
         auto& mat = state.material;
         mat.apply_pipeline(pass.encoder);
