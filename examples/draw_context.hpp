@@ -2,17 +2,15 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
 #include <dr/dynamic_array.hpp>
 #include <dr/hash_map.hpp>
 #include <dr/span.hpp>
 
+#include "basic_types.hpp"
 #include "draw_command.hpp"
 #include "geometry_stream.hpp"
 #include "gpu_resource.hpp"
-
-#include "dr_shim.hpp"
 
 namespace wgpu::sandbox
 {

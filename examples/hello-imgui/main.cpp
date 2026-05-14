@@ -6,11 +6,9 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
-
 #include "../example_app.hpp"
 #include "../gpu_resource.hpp"
-#include "../surface_render_pass.hpp"
+#include "../passes.hpp"
 
 namespace wgpu::sandbox
 {
@@ -70,16 +68,17 @@ void update()
     // Create a command encoder from the device
     GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(gpu.device, nullptr);
     assert(cmd_encoder);
+
     // Render pass
     {
         constexpr auto to_wgpu_color = [](f32 const c[3]) -> WGPUColor {
             return {c[0], c[1], c[2], 1.0};
         };
 
-        SurfaceRenderPass pass{
+        auto const pass = SurfaceRenderPass::make(
             cmd_encoder,
             gpu.surface,
-            to_wgpu_color(state.clear_color)};
+            to_wgpu_color(state.clear_color));
 
         // Issue UI draw command
         App::ui_draw(pass.encoder);

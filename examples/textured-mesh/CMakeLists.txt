@@ -2,17 +2,13 @@ set(app_name textured-mesh)
 
 add_executable(
     ${app_name}
-    "assets.cpp"
-    "impl.cpp"
     "main.cpp"
 )
 
-include(deps/stb-image)
 target_link_libraries(
     ${app_name}
     PRIVATE
         example-app
-        stb::image
 )
 
 if(EMSCRIPTEN)

@@ -1,5 +1,4 @@
 #include "gpu_resource.hpp"
-#include "webgpu/webgpu.h"
 
 namespace wgpu::sandbox
 {

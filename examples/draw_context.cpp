@@ -173,7 +173,18 @@ void DrawContext::submit_draw_cmds(
 
             if (needs_index_buf)
             {
-                auto const index_buf = cmd.index_buf ? cmd.index_buf : geometry.index_buffer();
+                WGPUBuffer index_buf{};
+                WGPUIndexFormat index_fmt{};
+                if (cmd.index_buf)
+                {
+                    index_buf = cmd.index_buf;
+                    index_fmt = cmd.index_fmt;
+                }
+                else
+                {
+                    index_buf = geometry.index_buffer();
+                    index_fmt = geometry.index_format;
+                }
                 assert(index_buf);
 
                 if (index_buf != prev_index_buf)
@@ -181,7 +192,7 @@ void DrawContext::submit_draw_cmds(
                     wgpuRenderPassEncoderSetIndexBuffer(
                         encoder,
                         index_buf,
-                        WGPUIndexFormat_Uint32,
+                        index_fmt,
                         0,
                         WGPU_WHOLE_SIZE);
 

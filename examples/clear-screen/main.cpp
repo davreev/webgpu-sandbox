@@ -6,7 +6,7 @@
 
 #include "../example_app.hpp"
 #include "../gpu_resource.hpp"
-#include "../surface_render_pass.hpp"
+#include "../passes.hpp"
 
 namespace wgpu::sandbox
 {
@@ -25,7 +25,7 @@ void update()
 
     // Render pass
     {
-        SurfaceRenderPass pass{cmd_encoder, gpu.surface, {1.0, 0.0, 0.5, 1.0}};
+        auto const pass = SurfaceRenderPass::make(cmd_encoder, gpu.surface, {1.0, 0.0, 0.5, 1.0});
 
         // NOTE(dr): Render pass clears the screen by default
     }
@@ -53,8 +53,8 @@ void update()
 #endif
             if (App::frame_count() % 100 == 0)
             {
-                fmt::print(
-                    "Finished frame {} with status: {}\n",
+                fmt::println(
+                    "Finished frame {} with status: {}",
                     App::frame_count(),
                     to_string(status));
             }

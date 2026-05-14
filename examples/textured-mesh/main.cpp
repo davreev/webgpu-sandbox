@@ -4,7 +4,6 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
 #include <dr/linalg_reshape.hpp>
 #include <dr/math.hpp>
@@ -14,11 +13,10 @@
 
 #include <dr/app/gfx_utils.hpp>
 
-#include "assets.hpp"
-
+#include "../assets.hpp"
 #include "../example_app.hpp"
 #include "../gpu_resource.hpp"
-#include "../surface_render_pass.hpp"
+#include "../passes.hpp"
 
 namespace wgpu::sandbox
 {
@@ -26,55 +24,6 @@ namespace
 {
 
 using App = ExampleApp;
-
-struct DepthTarget
-{
-    static constexpr WGPUTextureFormat format = WGPUTextureFormat_Depth32Float;
-    GpuTexture texture;
-    GpuTextureView view;
-
-    static DepthTarget make(WGPUDevice const device, i32 const width, i32 const height)
-    {
-        DepthTarget result{};
-        result.texture = make_texture(device, width, height, format);
-        result.view = make_view(result.texture);
-        return result;
-    }
-
-    void resize(WGPUDevice const device, i32 const width, i32 const height)
-    {
-        *this = make(device, width, height);
-    }
-
-  private:
-    static WGPUTexture make_texture(
-        WGPUDevice const device,
-        uint32_t const width,
-        uint32_t const height,
-        WGPUTextureFormat const format)
-    {
-        WGPUTextureDescriptor const desc{
-            .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
-            .dimension = WGPUTextureDimension_2D,
-            .size = {width, height, 1},
-            .format = format,
-            .mipLevelCount = 1,
-            .sampleCount = 1,
-        };
-        return wgpuDeviceCreateTexture(device, &desc);
-    }
-
-    static WGPUTextureView make_view(WGPUTexture const texture)
-    {
-        WGPUTextureViewDescriptor const desc{
-            .format = wgpuTextureGetFormat(texture),
-            .dimension = WGPUTextureViewDimension_2D,
-            .mipLevelCount = 1,
-            .arrayLayerCount = 1,
-        };
-        return wgpuTextureCreateView(texture, &desc);
-    }
-};
 
 struct RenderMesh
 {
@@ -228,11 +177,13 @@ struct RenderMaterial
 
         // Init pipeline
         {
-            ShaderAsset const& asset = load_shader_asset("assets/shaders/unlit_texture.wgsl");
+            ShaderAsset const* asset = load_shader_asset("assets/shaders/unlit_texture.wgsl");
+            assert(asset);
+
             pipeline = make_pipeline(
                 device,
                 pipeline_layout,
-                {asset.src.c_str(), WGPU_STRLEN},
+                {asset->src.c_str(), WGPU_STRLEN},
                 surface_format,
                 DepthTarget::format);
             assert(pipeline);
@@ -240,13 +191,15 @@ struct RenderMaterial
 
         // Init color map
         {
-            ImageAsset const& asset = load_image_asset("assets/images/cube-faces.png");
+            ImageAsset const* asset = load_image_asset("assets/images/cube-faces.png");
+            assert(asset);
+
             color_map.texture = make_color_texture(
                 device,
-                asset.data.get(),
-                asset.width,
-                asset.height,
-                asset.stride,
+                asset->data.get(),
+                asset->width,
+                asset->height,
+                asset->stride,
                 color_map.view,
                 color_map.sampler);
             assert(color_map.texture);
@@ -590,11 +543,11 @@ void update()
 
     // Render pass
     {
-        SurfaceRenderPass pass{
+        auto const pass = SurfaceRenderPass::make(
             cmd_encoder,
             App::gpu().surface,
             {0.15, 0.15, 0.15, 1.0},
-            state.depth.view};
+            state.depth.view);
 
         auto& mat = state.material;
         mat.apply_pipeline(pass.encoder);
@@ -628,7 +581,7 @@ void handle_event(App::Event const& e)
     if (e.type == App::Event::Type::FramebufferResize)
     {
         auto const [w, h] = e.framebuffer_resize;
-        state.depth.resize(App::gpu().device, w, h);
+        state.depth = DepthTarget::make(App::gpu().device, w, h);
     }
 }
 

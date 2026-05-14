@@ -25,8 +25,8 @@ WGPUDeviceDescriptor make_default()
            WGPUStringView msg,
            void* /*userdata1*/,
            void* /*userdata2*/) {
-            fmt::print(
-                "WebGPU device error: {} ({})\nMessage: {}\n",
+            fmt::println(
+                "WebGPU device error: {} ({})\nMessage: {}",
                 to_string(type),
                 int(type),
                 msg.data);
@@ -54,18 +54,20 @@ GpuContext GpuContext::make(
     WGPURequestAdapterOptions const* const adapter_opts,
     WGPUDeviceDescriptor const* const device_desc)
 {
-    GpuContext result{};
+    WGPUInstance const instance = wgpuCreateInstance(or_default(instance_desc));
+    assert(instance);
 
-    result.instance = wgpuCreateInstance(or_default(instance_desc));
-    assert(result.instance);
+    WGPUAdapter const adapter = request_adapter(instance, or_default(adapter_opts));
+    assert(adapter);
 
-    result.adapter = request_adapter(result.instance, or_default(adapter_opts));
-    assert(result.adapter);
+    WGPUDevice const device = request_device(instance, adapter, or_default(device_desc));
+    assert(device);
 
-    result.device = request_device(result.instance, result.adapter, or_default(device_desc));
-    assert(result.device);
-
-    return result;
+    return {
+        .instance = instance,
+        .adapter = adapter,
+        .device = device,
+    };
 }
 
 GpuContext GpuContext::make(
@@ -74,25 +76,28 @@ GpuContext GpuContext::make(
     WGPURequestAdapterOptions const* const adapter_opts,
     WGPUDeviceDescriptor const* const device_desc)
 {
-    GpuContext result{};
+    WGPUInstance const instance = wgpuCreateInstance(or_default(instance_desc));
+    assert(instance);
 
-    result.instance = wgpuCreateInstance(or_default(instance_desc));
-    assert(result.instance);
-
-    result.surface = make_surface(result.instance, surface_src);
-    assert(result.surface);
+    WGPUSurface const surface = make_surface(instance, surface_src);
+    assert(surface);
 
     auto opts = *or_default(adapter_opts);
-    opts.compatibleSurface = result.surface;
-    result.adapter = request_adapter(result.instance, &opts);
-    assert(result.adapter);
+    opts.compatibleSurface = surface;
+    WGPUAdapter const adapter = request_adapter(instance, &opts);
+    assert(adapter);
 
-    result.device = request_device(result.instance, result.adapter, or_default(device_desc));
-    assert(result.device);
+    WGPUDevice const device = request_device(instance, adapter, or_default(device_desc));
+    assert(device);
 
-    result.config_surface(surface_src.window);
-
-    return result;
+    GpuContext ctx{
+        .instance = instance,
+        .adapter = adapter,
+        .device = device,
+        .surface = surface,
+    };
+    ctx.config_surface(surface_src.window);
+    return ctx;
 }
 
 void GpuContext::config_surface(i32 const width, i32 const height)

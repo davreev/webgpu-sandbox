@@ -1,18 +1,23 @@
 add_library(
     example-app STATIC
+    assets.cpp
     draw_context.cpp
     example_app.cpp
     geometry_stream.cpp
     gpu_context.cpp
     gpu_resource.cpp
-    surface_render_pass.cpp
+    impl.cpp
+    passes.cpp
 )
 
 include(deps/dr-app)
+include(deps/stb-image)
+
 target_link_libraries(
     example-app
     PUBLIC
         dr::app-util
+        stb::image
         wgpu-app
 )
 

@@ -6,7 +6,6 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
 #include <dr/defer.hpp>
 #include <dr/memory.hpp>

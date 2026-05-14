@@ -2,15 +2,13 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
 #include <dr/dynamic_array.hpp>
 #include <dr/hash.hpp>
 #include <dr/hash_map.hpp>
 #include <dr/span.hpp>
 
+#include "basic_types.hpp"
 #include "gpu_resource.hpp"
-
-#include "dr_shim.hpp"
 
 namespace wgpu::sandbox
 {
@@ -27,6 +25,8 @@ struct BufferStage
 
 struct GeometryStream
 {
+    static constexpr WGPUIndexFormat index_format{WGPUIndexFormat_Uint32};
+
     static void init_shared_resources(WGPUDevice device);
 
     u32 push_vertices(Span<u8 const> const& data);

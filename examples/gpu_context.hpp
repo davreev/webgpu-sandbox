@@ -1,12 +1,11 @@
 #pragma once
 
-#include <dr/basic_types.hpp>
+#include <webgpu/webgpu.h>
 
 #include <wgpu_utils.hpp>
 
+#include "basic_types.hpp"
 #include "gpu_resource.hpp"
-
-#include "dr_shim.hpp"
 
 namespace wgpu::sandbox
 {

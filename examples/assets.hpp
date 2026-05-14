@@ -2,10 +2,9 @@
 
 #include <memory>
 
-#include <dr/basic_types.hpp>
 #include <dr/string.hpp>
 
-#include "../dr_shim.hpp"
+#include "basic_types.hpp"
 
 namespace wgpu::sandbox
 {
@@ -25,8 +24,12 @@ struct ShaderAsset
     String src{};
 };
 
-ImageAsset load_image_asset(char const* path);
+ImageAsset const* load_image_asset(char const* path, bool force_reload = false);
+void release_image_asset(char const* path);
 
-ShaderAsset load_shader_asset(char const* path);
+ShaderAsset const* load_shader_asset(char const* path, bool force_reload = false);
+void release_shader_asset(char const* path);
+
+void release_all_assets();
 
 } // namespace wgpu::sandbox

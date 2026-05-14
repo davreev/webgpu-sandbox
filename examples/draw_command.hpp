@@ -2,10 +2,9 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
 #include <dr/result.hpp>
 
-#include "dr_shim.hpp"
+#include "basic_types.hpp"
 
 namespace wgpu::sandbox
 {
@@ -25,6 +24,7 @@ struct DrawCommand
     WGPUBindGroup material_bg{};
     WGPUBindGroup geometry_bg{};
     WGPUBuffer index_buf{};
+    WGPUIndexFormat index_fmt{};
     Maybe<u32[4]> geometry_offsets{};
     Maybe<u32> uniform_offset{};
 

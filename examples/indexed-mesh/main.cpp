@@ -4,7 +4,6 @@
 
 #include <webgpu/webgpu.h>
 
-#include <dr/basic_types.hpp>
 #include <dr/container_utils.hpp>
 #include <dr/memory.hpp>
 #include <dr/span.hpp>
@@ -13,7 +12,7 @@
 
 #include "../example_app.hpp"
 #include "../gpu_resource.hpp"
-#include "../surface_render_pass.hpp"
+#include "../passes.hpp"
 
 namespace wgpu::sandbox
 {
@@ -196,7 +195,7 @@ void update()
 
     // Render pass
     {
-        SurfaceRenderPass pass{cmd_encoder, App::gpu().surface};
+        auto const pass = SurfaceRenderPass::make(cmd_encoder, App::gpu().surface);
         wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
         state.geometry.bind_resources(pass.encoder);
         state.geometry.dispatch_draw(pass.encoder);
