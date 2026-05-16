@@ -42,6 +42,7 @@ endif()
 
 add_subdirectory(clear-screen)
 add_subdirectory(hello-compute)
+add_subdirectory(hello-geometry-stream)
 add_subdirectory(hello-imgui)
 add_subdirectory(hello-triangle)
 add_subdirectory(indexed-mesh)

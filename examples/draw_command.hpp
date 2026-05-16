@@ -4,6 +4,8 @@
 
 #include <dr/result.hpp>
 
+#include <wgpu_default_limits.hpp>
+
 #include "basic_types.hpp"
 
 namespace wgpu::sandbox
@@ -11,6 +13,9 @@ namespace wgpu::sandbox
 
 struct DrawCommand
 {
+    static constexpr u32 num_geometry_slots =
+        default_max_dynamic_storage_buffers_per_pipeline_layout;
+
     enum struct Type : u8
     {
         Undefined = 0,
@@ -25,7 +30,7 @@ struct DrawCommand
     WGPUBindGroup geometry_bg{};
     WGPUBuffer index_buf{};
     WGPUIndexFormat index_fmt{};
-    Maybe<u32[4]> geometry_offsets{};
+    Maybe<u32[num_geometry_slots]> geometry_offsets{};
     Maybe<u32> uniform_offset{};
 
     union

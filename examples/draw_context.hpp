@@ -39,4 +39,12 @@ struct DrawContext
     void rebuild_uniform_bg(WGPUDevice device);
 };
 
+enum struct BindSlot : u8
+{
+    Pass = 0,
+    Material,
+    Geometry,
+    Object,
+};
+
 } // namespace wgpu::sandbox

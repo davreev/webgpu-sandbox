@@ -10,14 +10,6 @@ namespace wgpu::sandbox
 namespace
 {
 
-enum struct BindIndex : u8
-{
-    Pass = 0,
-    Material,
-    Geometry,
-    Object,
-};
-
 constexpr u32 uniform_buffer_alignment = default_min_uniform_buffer_offset_alignment;
 
 GpuBindGroupLayout uniform_bg_layout{};
@@ -117,7 +109,7 @@ void DrawContext::submit_draw_cmds(
         WGPUBuffer prev_index_buf{};
 
         if (pass_bg)
-            wgpuRenderPassEncoderSetBindGroup(encoder, u32(BindIndex::Pass), pass_bg, 0, nullptr);
+            wgpuRenderPassEncoderSetBindGroup(encoder, u32(BindSlot::Pass), pass_bg, 0, nullptr);
 
         for (auto const& cmd : draw_cmds)
         {
@@ -131,7 +123,7 @@ void DrawContext::submit_draw_cmds(
             {
                 wgpuRenderPassEncoderSetBindGroup(
                     encoder,
-                    u32(BindIndex::Material),
+                    u32(BindSlot::Material),
                     cmd.material_bg,
                     0,
                     nullptr);
@@ -143,11 +135,13 @@ void DrawContext::submit_draw_cmds(
             // command
             if (cmd.geometry_offsets)
             {
+                static_assert(DrawCommand::num_geometry_slots == GeometryStream::num_vertex_slots);
+
                 wgpuRenderPassEncoderSetBindGroup(
                     encoder,
-                    u32(BindIndex::Geometry),
-                    cmd.geometry_bg ? cmd.geometry_bg : geometry.bindings(),
-                    4,
+                    u32(BindSlot::Geometry),
+                    cmd.geometry_bg ? cmd.geometry_bg : geometry.vertex_bindings(),
+                    DrawCommand::num_geometry_slots,
                     cmd.geometry_offsets.value());
 
                 // Ignore prev bg when using dynamic offsets
@@ -159,7 +153,7 @@ void DrawContext::submit_draw_cmds(
                 {
                     wgpuRenderPassEncoderSetBindGroup(
                         encoder,
-                        u32(BindIndex::Geometry),
+                        u32(BindSlot::Geometry),
                         cmd.geometry_bg,
                         0,
                         nullptr);
@@ -204,7 +198,7 @@ void DrawContext::submit_draw_cmds(
             {
                 wgpuRenderPassEncoderSetBindGroup(
                     encoder,
-                    u32(BindIndex::Object),
+                    u32(BindSlot::Object),
                     uniform_bg_,
                     1,
                     &cmd.uniform_offset.value());
