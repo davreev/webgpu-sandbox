@@ -12,7 +12,7 @@ namespace
 
 constexpr u32 uniform_buffer_alignment = default_min_uniform_buffer_offset_alignment;
 
-GpuBindGroupLayout uniform_bg_layout{};
+GpuBindGroupLayout uniform_bgl{};
 
 } // namespace
 
@@ -44,7 +44,7 @@ void DrawContext::init_shared_resources(WGPUDevice const device)
         .entryCount = 1,
         .entries = entries,
     };
-    uniform_bg_layout = wgpuDeviceCreateBindGroupLayout(device, &desc);
+    uniform_bgl = wgpuDeviceCreateBindGroupLayout(device, &desc);
 }
 
 u32 DrawContext::push_uniforms(Span<u8 const> const& data)
@@ -63,7 +63,7 @@ u32 DrawContext::push_uniforms_once(void const* key, Span<u8 const> const& data)
 
 void DrawContext::rebuild_uniform_bg(WGPUDevice const device)
 {
-    assert(uniform_bg_layout);
+    assert(uniform_bgl);
 
     WGPUBindGroupEntry const entries[1]{
         {
@@ -73,7 +73,7 @@ void DrawContext::rebuild_uniform_bg(WGPUDevice const device)
         },
     };
     WGPUBindGroupDescriptor const desc{
-        .layout = uniform_bg_layout,
+        .layout = uniform_bgl,
         .entryCount = 1,
         .entries = entries,
     };
@@ -89,7 +89,7 @@ void DrawContext::submit_draw_cmds(
     if (uniform_stage_.update_device(device, queue, WGPUBufferUsage_Uniform))
         rebuild_uniform_bg(device);
 
-    geometry.update_device_buffers(device, queue);
+    streams.vertex.update_device_buffer(device, queue);
 
     // Order draw commands to minimize state changes
     std::sort(begin(draw_cmds), end(draw_cmds), [](DrawCommand const& a, DrawCommand const& b) {
@@ -135,12 +135,12 @@ void DrawContext::submit_draw_cmds(
             // command
             if (cmd.geometry_offsets)
             {
-                static_assert(DrawCommand::num_geometry_slots == GeometryStream::num_vertex_slots);
+                static_assert(DrawCommand::num_geometry_slots == VertexStream::num_slots);
 
                 wgpuRenderPassEncoderSetBindGroup(
                     encoder,
                     u32(BindSlot::Geometry),
-                    cmd.geometry_bg ? cmd.geometry_bg : geometry.vertex_bindings(),
+                    cmd.geometry_bg ? cmd.geometry_bg : streams.vertex.bindings(),
                     DrawCommand::num_geometry_slots,
                     cmd.geometry_offsets.value());
 
@@ -176,8 +176,8 @@ void DrawContext::submit_draw_cmds(
                 }
                 else
                 {
-                    index_buf = geometry.index_buffer();
-                    index_fmt = geometry.index_format;
+                    index_buf = streams.index.device_buffer();
+                    index_fmt = streams.index.format;
                 }
                 assert(index_buf);
 
@@ -253,7 +253,8 @@ void DrawContext::submit_draw_cmds(
 
     // Cleanup
     draw_cmds.clear();
-    geometry.clear();
+    streams.vertex.clear();
+    streams.index.clear();
     uniform_stage_.host_buf.clear();
     uniform_offsets_.clear();
 }

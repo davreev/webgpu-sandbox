@@ -20,7 +20,10 @@ struct DrawContext
     static void init_shared_resources(WGPUDevice device);
 
     DynamicArray<DrawCommand> draw_cmds;
-    GeometryStream geometry;
+    struct {
+        VertexStream vertex;
+        IndexStream<i32> index;
+    } streams;
 
     u32 push_uniforms(Span<u8 const> const& data);
     u32 push_uniforms_once(void const* key, Span<u8 const> const& data);

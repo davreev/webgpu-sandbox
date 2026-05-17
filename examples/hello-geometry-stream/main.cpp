@@ -120,7 +120,11 @@ struct
 {
     DepthTarget depth;
     GpuRenderPipeline pipeline;
-    GeometryStream geometry;
+    struct
+    {
+        VertexStream vertex;
+        IndexStream<i32> index;
+    } streams;
     struct
     {
         GpuBindGroupLayout bgl;
@@ -132,38 +136,6 @@ struct
     f32 clip_near{0.1f};
     f32 clip_far{200.0f};
 } state;
-
-// TODO(dr): Expose BG layout of geometry stream
-
-#if false
-
-// Mirrors the bind group layout that GeometryStream creates internally for its
-// vertex storage buffers (4 read-only storage entries with dynamic offsets).
-// The bind group returned by GeometryStream::bindings() is group-equivalent to
-// this layout, so it can be bound to a pipeline that declares it.
-WGPUBindGroupLayout make_geom_bgl(WGPUDevice const device)
-{
-    constexpr u32 slot_count{4};
-    WGPUBindGroupLayoutEntry entries[slot_count]{};
-    for (u32 i = 0; i < slot_count; ++i)
-    {
-        entries[i] = {
-            .binding = i,
-            .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment,
-            .buffer{
-                .type = WGPUBufferBindingType_ReadOnlyStorage,
-                .hasDynamicOffset = true,
-                .minBindingSize = 0,
-            },
-        };
-    }
-    WGPUBindGroupLayoutDescriptor const desc{
-        .entryCount = slot_count,
-        .entries = entries,
-    };
-    return wgpuDeviceCreateBindGroupLayout(device, &desc);
-}
-#endif
 
 GpuBindGroupLayout empty_bgl;
 GpuBindGroup empty_bg;
@@ -275,7 +247,7 @@ void init_gpu_resources()
     state.depth = DepthTarget::make(device, fb_w, fb_h);
 
     init_empty_bindings(device);
-    GeometryStream::init_shared_resources(device);
+    VertexStream::init_shared_resources(device);
 
     // Uniform buffer/bindings
     {
@@ -331,7 +303,7 @@ void init_gpu_resources()
         WGPUBindGroupLayout const bg_layout[]{
             empty_bgl, // Pass
             empty_bgl, // Material
-            GeometryStream::vertex_bindings_layout(), // Geometry
+            VertexStream::bindings_layout(), // Geometry
             state.uniforms.bgl, // Object
         };
         WGPUPipelineLayoutDescriptor const pl_desc{
@@ -411,13 +383,18 @@ void update()
 
     // Push geometry to the stream. The returned byte offsets are used as the matching dynamic
     // offsets at draw time; the caller decides which slot in geom.bindings() each one is bound to.
-    auto& geom = state.geometry;
-    u32 const vp_offset = geom.push_vertices(as<u8>(as_span(vertex_data)));
-    u32 const ip_offset = geom.push_vertices(as<u8>(as_span(state.instances)));
-    u32 const idx_offset = geom.push_indices(as<u8>(as_span(to_tris)));
-    geom.update_device_buffers(device, queue);
+    auto& streams = state.streams;
 
-    // Update pass uniforms
+    u32 const vp_offset = streams.vertex.push(as<u8>(as_span(vertex_data)));
+    u32 const ip_offset = streams.vertex.push(as<u8>(as_span(state.instances)));
+    streams.vertex.update_device_buffer(device, queue);
+    streams.vertex.clear();
+
+    u32 const idx_offset = streams.index.push(as<i32>(as_span(to_tris)));
+    streams.index.update_device_buffer(device, queue);
+    streams.index.clear();
+
+    // Update pass uniformss
     Mat4<f32> const world_to_clip = make_world_to_clip();
     wgpuQueueWriteBuffer(queue, state.uniforms.buf, 0, world_to_clip.data(), sizeof(ObjectData));
 
@@ -446,7 +423,7 @@ void update()
         wgpuRenderPassEncoderSetBindGroup(
             pass.encoder,
             u32(BindSlot::Geometry),
-            geom.vertex_bindings(),
+            streams.vertex.bindings(),
             size(offsets),
             offsets);
 
@@ -460,8 +437,8 @@ void update()
 
         wgpuRenderPassEncoderSetIndexBuffer(
             pass.encoder,
-            geom.index_buffer(),
-            GeometryStream::index_format,
+            streams.index.device_buffer(),
+            streams.index.format,
             0,
             WGPU_WHOLE_SIZE);
 
@@ -469,7 +446,7 @@ void update()
             pass.encoder,
             index_count,
             state.instances.size(),
-            idx_offset / sizeof(u32),
+            idx_offset,
             0,
             0);
     }
@@ -477,8 +454,6 @@ void update()
     GpuCommandBuffer const cmds = wgpuCommandEncoderFinish(cmd_encoder, nullptr);
     assert(cmds);
     wgpuQueueSubmit(queue, 1, &cmds.handle());
-
-    geom.clear();
 }
 
 void handle_event(App::Event const& e)
