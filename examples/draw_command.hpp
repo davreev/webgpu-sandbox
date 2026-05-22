@@ -13,9 +13,6 @@ namespace wgpu::sandbox
 
 struct DrawCommand
 {
-    static constexpr u32 num_geometry_slots =
-        default_max_dynamic_storage_buffers_per_pipeline_layout;
-
     enum struct Type : u8
     {
         Undefined = 0,
@@ -25,14 +22,25 @@ struct DrawCommand
         DrawIndexedIndirect,
     };
 
-    WGPURenderPipeline pipeline{};
-    WGPUBindGroup material_bg{};
-    WGPUBindGroup geometry_bg{};
-    WGPUBuffer index_buf{};
-    WGPUIndexFormat index_fmt{};
-    Maybe<u32[num_geometry_slots]> geometry_offsets{};
-    Maybe<u32> uniform_offset{};
+    enum Flags : u32
+    {
+        Flags_None = 0,
+        Flags_UseProceduralGeometry = 1 << 0,
+        // ...
+        Flags_All = ~Flags_None,
+    };
 
+    WGPURenderPipeline pipeline{};
+    WGPUBindGroup material_bindings{};
+    WGPUBindGroup geometry_bindings{};
+    WGPUBuffer index_buffer{};
+    WGPUIndexFormat index_format{};
+    struct
+    {
+        u32 material{};
+        u32 geometry{};
+        u32 object{};
+    } uniform_offsets;
     union
     {
         struct
@@ -57,6 +65,7 @@ struct DrawCommand
         } draw_indirect;
     };
     Type type{};
+    Flags flags{};
 };
 
 } // namespace wgpu::sandbox

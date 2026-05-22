@@ -5,100 +5,34 @@
 
 #include <wgpu_default_limits.hpp>
 
+#include "draw_command.hpp"
+#include "geometry_stream.hpp"
+
 namespace wgpu::sandbox
 {
-namespace
-{
-
-constexpr u32 uniform_buffer_alignment = default_min_uniform_buffer_offset_alignment;
-
-GpuBindGroupLayout uniform_bgl{};
-
-} // namespace
-
-void check_device_limits(WGPUDevice const device)
-{
-    WGPULimits limits{};
-    [[maybe_unused]]
-    auto const status = wgpuDeviceGetLimits(device, &limits);
-    assert(status == WGPUStatus::WGPUStatus_Success);
-    assert(uniform_buffer_alignment >= limits.minUniformBufferOffsetAlignment);
-}
-
-void DrawContext::init_shared_resources(WGPUDevice const device)
-{
-    check_device_limits(device);
-
-    WGPUBindGroupLayoutEntry const entries[1]{
-        {
-            .binding = 0,
-            .visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment,
-            .buffer{
-                .type = WGPUBufferBindingType_Uniform,
-                .hasDynamicOffset = true,
-                .minBindingSize = 0,
-            },
-        },
-    };
-    WGPUBindGroupLayoutDescriptor const desc{
-        .entryCount = 1,
-        .entries = entries,
-    };
-    uniform_bgl = wgpuDeviceCreateBindGroupLayout(device, &desc);
-}
-
-u32 DrawContext::push_uniforms(Span<u8 const> const& data)
-{
-    return uniform_stage_.append(data, uniform_buffer_alignment);
-}
-
-u32 DrawContext::push_uniforms_once(void const* key, Span<u8 const> const& data)
-{
-    auto const [it, ok] = uniform_offsets_.try_emplace(key);
-    if (ok)
-        it->second = push_uniforms(data);
-
-    return it->second;
-}
-
-void DrawContext::rebuild_uniform_bg(WGPUDevice const device)
-{
-    assert(uniform_bgl);
-
-    WGPUBindGroupEntry const entries[1]{
-        {
-            .binding = 0,
-            .buffer = uniform_stage_.device_buf,
-            .size = WGPU_WHOLE_SIZE,
-        },
-    };
-    WGPUBindGroupDescriptor const desc{
-        .layout = uniform_bgl,
-        .entryCount = 1,
-        .entries = entries,
-    };
-    uniform_bg_ = wgpuDeviceCreateBindGroup(device, &desc);
-}
 
 void DrawContext::submit_draw_cmds(
     WGPUDevice const device,
     WGPUQueue const queue,
     WGPURenderPassEncoder const encoder,
-    WGPUBindGroup const pass_bg)
+    PassInfo const& pass)
 {
-    if (uniform_stage_.update_device(device, queue, WGPUBufferUsage_Uniform))
-        rebuild_uniform_bg(device);
+    // Push pass uniforms
+    u32 const pass_uniform_offset = uniform_stream.push(pass.uniform_data);
 
-    streams.vertex.update_device_buffer(device, queue);
+    // Update stream device buffers and bindings
+    vertex_stream.update_device_buffer(device, queue);
+    index_stream.update_device_buffer(device, queue);
+    uniform_stream.update_device_buffer(device, queue);
 
     // Order draw commands to minimize state changes
     std::sort(begin(draw_cmds), end(draw_cmds), [](DrawCommand const& a, DrawCommand const& b) {
         if (a.pipeline != b.pipeline)
             return a.pipeline < b.pipeline;
-        else if (a.material_bg != b.material_bg)
-            return a.material_bg < b.material_bg;
+        else if (a.material_bindings != b.material_bindings)
+            return a.material_bindings < b.material_bindings;
         else
-            return a.geometry_bg < b.geometry_bg;
+            return a.geometry_bindings < b.geometry_bindings;
     });
 
     // Submit draw commands
@@ -108,8 +42,13 @@ void DrawContext::submit_draw_cmds(
         WGPUBindGroup prev_geometry_bg{};
         WGPUBuffer prev_index_buf{};
 
-        if (pass_bg)
-            wgpuRenderPassEncoderSetBindGroup(encoder, u32(BindSlot::Pass), pass_bg, 0, nullptr);
+        if (pass.bindings)
+            wgpuRenderPassEncoderSetBindGroup(
+                encoder,
+                u32(BindSlot::Pass),
+                pass.bindings,
+                0,
+                nullptr);
 
         for (auto const& cmd : draw_cmds)
         {
@@ -119,46 +58,39 @@ void DrawContext::submit_draw_cmds(
                 prev_pipeline = cmd.pipeline;
             }
 
-            if (cmd.material_bg && cmd.material_bg != prev_material_bg)
+            if (cmd.material_bindings && cmd.material_bindings != prev_material_bg)
             {
                 wgpuRenderPassEncoderSetBindGroup(
                     encoder,
                     u32(BindSlot::Material),
-                    cmd.material_bg,
+                    cmd.material_bindings,
                     0,
                     nullptr);
 
-                prev_material_bg = cmd.material_bg;
+                prev_material_bg = cmd.material_bindings;
             }
 
-            // Always set the geometry bind group if using dynamic offsets as these will vary per
-            // command
-            if (cmd.geometry_offsets)
+            if (cmd.flags & DrawCommand::Flags_UseProceduralGeometry)
             {
-                static_assert(DrawCommand::num_geometry_slots == VertexStream::num_slots);
-
-                wgpuRenderPassEncoderSetBindGroup(
-                    encoder,
-                    u32(BindSlot::Geometry),
-                    cmd.geometry_bg ? cmd.geometry_bg : streams.vertex.bindings(),
-                    DrawCommand::num_geometry_slots,
-                    cmd.geometry_offsets.value());
-
-                // Ignore prev bg when using dynamic offsets
-                prev_geometry_bg = {};
+                // Skip binding update if geometry is generated procedurally within the shader
+                // ...
             }
             else
             {
-                if (cmd.geometry_bg && cmd.geometry_bg != prev_geometry_bg)
+                WGPUBindGroup const geometry_bg = cmd.geometry_bindings //
+                    ? cmd.geometry_bindings
+                    : vertex_stream.bindings();
+
+                if (geometry_bg && geometry_bg != prev_geometry_bg)
                 {
                     wgpuRenderPassEncoderSetBindGroup(
                         encoder,
                         u32(BindSlot::Geometry),
-                        cmd.geometry_bg,
+                        geometry_bg,
                         0,
                         nullptr);
 
-                    prev_geometry_bg = cmd.geometry_bg;
+                    prev_geometry_bg = geometry_bg;
                 }
             }
 
@@ -169,15 +101,15 @@ void DrawContext::submit_draw_cmds(
             {
                 WGPUBuffer index_buf{};
                 WGPUIndexFormat index_fmt{};
-                if (cmd.index_buf)
+                if (cmd.index_buffer)
                 {
-                    index_buf = cmd.index_buf;
-                    index_fmt = cmd.index_fmt;
+                    index_buf = cmd.index_buffer;
+                    index_fmt = cmd.index_format;
                 }
                 else
                 {
-                    index_buf = streams.index.device_buffer();
-                    index_fmt = streams.index.format;
+                    index_buf = index_stream.device_buffer();
+                    index_fmt = index_stream.format;
                 }
                 assert(index_buf);
 
@@ -194,15 +126,19 @@ void DrawContext::submit_draw_cmds(
                 }
             }
 
-            if (uniform_bg_ && cmd.uniform_offset)
-            {
-                wgpuRenderPassEncoderSetBindGroup(
-                    encoder,
-                    u32(BindSlot::Object),
-                    uniform_bg_,
-                    1,
-                    &cmd.uniform_offset.value());
-            }
+            u32 const uniform_offsets[]{
+                pass_uniform_offset,
+                cmd.uniform_offsets.material,
+                cmd.uniform_offsets.geometry,
+                cmd.uniform_offsets.object,
+            };
+
+            wgpuRenderPassEncoderSetBindGroup(
+                encoder,
+                u32(BindSlot::Uniform),
+                uniform_stream.bindings(),
+                size(uniform_offsets),
+                uniform_offsets);
 
             switch (cmd.type)
             {
@@ -253,10 +189,9 @@ void DrawContext::submit_draw_cmds(
 
     // Cleanup
     draw_cmds.clear();
-    streams.vertex.clear();
-    streams.index.clear();
-    uniform_stage_.host_buf.clear();
-    uniform_offsets_.clear();
+    vertex_stream.clear();
+    index_stream.clear();
+    uniform_stream.clear();
 }
 
 } // namespace wgpu::sandbox

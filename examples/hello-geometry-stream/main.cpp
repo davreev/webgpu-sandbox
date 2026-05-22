@@ -14,8 +14,8 @@
 #include <dr/app/gfx_utils.hpp>
 
 #include "../assets.hpp"
+#include "../draw_context.hpp"
 #include "../example_app.hpp"
-#include "../geometry_stream.hpp"
 #include "../gpu_resource.hpp"
 #include "../passes.hpp"
 
@@ -26,111 +26,73 @@ namespace
 
 using App = ExampleApp;
 
-// TODO(dr): Wrap truncated octahedron in a struct
+struct Lattice
+{
+    struct Mesh
+    {
+        // Truncated octahedron: 24 vertices = permutations of (0, ±1, ±2).
+        static constexpr i8 verts[24][3]{
+            {0, 1, 2}, {0, 1, -2}, {0, -1, 2}, {0, -1, -2}, //  0..3
+            {0, 2, 1}, {0, 2, -1}, {0, -2, 1}, {0, -2, -1}, //  4..7
+            {1, 0, 2}, {1, 0, -2}, {-1, 0, 2}, {-1, 0, -2}, //  8..11
+            {1, 2, 0}, {1, -2, 0}, {-1, 2, 0}, {-1, -2, 0}, // 12..15
+            {2, 0, 1}, {2, 0, -1}, {-2, 0, 1}, {-2, 0, -1}, // 16..19
+            {2, 1, 0}, {2, -1, 0}, {-2, 1, 0}, {-2, -1, 0}, // 20..23
+        };
 
-// Truncated octahedron: 24 vertices = permutations of (0, ±1, ±2).
-constexpr i8 to_verts[24][3]{
-    {0, 1, 2}, {0, 1, -2}, {0, -1, 2}, {0, -1, -2}, //  0..3
-    {0, 2, 1}, {0, 2, -1}, {0, -2, 1}, {0, -2, -1}, //  4..7
-    {1, 0, 2}, {1, 0, -2}, {-1, 0, 2}, {-1, 0, -2}, //  8..11
-    {1, 2, 0}, {1, -2, 0}, {-1, 2, 0}, {-1, -2, 0}, // 12..15
-    {2, 0, 1}, {2, 0, -1}, {-2, 0, 1}, {-2, 0, -1}, // 16..19
-    {2, 1, 0}, {2, -1, 0}, {-2, 1, 0}, {-2, -1, 0}, // 20..23
+        // 14 faces (6 squares + 8 hexagons), triangulated as fans. clang-format off
+        static constexpr u32 tris[44][3]{
+            // Square faces
+            {20, 16, 21}, {20, 21, 17}, // +x
+            {22, 18, 23}, {22, 23, 19}, // -x
+            {12, 4, 14}, {12, 14, 5}, // +y
+            {13, 6, 15}, {13, 15, 7}, // -y
+            {8, 0, 10}, {8, 10, 2}, // +z
+            {9, 1, 11}, {9, 11, 3}, // -z
+            // Hexagonal faces (one per (sx,sy,sz) octant)
+            {20, 12, 4}, {20, 4, 0}, {20, 0, 8}, {20, 8, 16}, // +++
+            {20, 12, 5}, {20, 5, 1}, {20, 1, 9}, {20, 9, 17}, // ++-
+            {21, 13, 6}, {21, 6, 2}, {21, 2, 8}, {21, 8, 16}, // +-+
+            {21, 13, 7}, {21, 7, 3}, {21, 3, 9}, {21, 9, 17}, // +--
+            {22, 14, 4}, {22, 4, 0}, {22, 0, 10}, {22, 10, 18}, // -++
+            {22, 14, 5}, {22, 5, 1}, {22, 1, 11}, {22, 11, 19}, // -+-
+            {23, 15, 6}, {23, 6, 2}, {23, 2, 10}, {23, 10, 18}, // --+
+            {23, 15, 7}, {23, 7, 3}, {23, 3, 11}, {23, 11, 19}, // ---
+        };
+        // clang-format on
+
+        static constexpr u32 num_verts = size(verts);
+        static constexpr u32 num_faces = 14;
+        static constexpr u32 num_tris = size(tris);
+        static constexpr u32 num_indices = 3 * num_tris;
+    };
+
+    // Lattice spacing of the truncated-octahedron tessellation. The TO above has hexagonal face
+    // centers at (±1, ±1, ±1), so adjacent cell centers along a (1,1,1)-type axis are 2*sqrt(3)
+    // apart; along an axis they are 4 apart.
+    static constexpr f32 spacing{4.0f};
 };
-
-// 14 faces (6 squares + 8 hexagons), triangulated as fans.
-constexpr u32 to_tris[44][3]{
-    // Square faces
-    {20, 16, 21},
-    {20, 21, 17}, // +x
-    {22, 18, 23},
-    {22, 23, 19}, // -x
-    {12, 4, 14},
-    {12, 14, 5}, // +y
-    {13, 6, 15},
-    {13, 15, 7}, // -y
-    {8, 0, 10},
-    {8, 10, 2}, // +z
-    {9, 1, 11},
-    {9, 11, 3}, // -z
-    // Hexagonal faces (one per (sx,sy,sz) octant)
-    {20, 12, 4},
-    {20, 4, 0},
-    {20, 0, 8},
-    {20, 8, 16}, // +++
-    {20, 12, 5},
-    {20, 5, 1},
-    {20, 1, 9},
-    {20, 9, 17}, // ++-
-    {21, 13, 6},
-    {21, 6, 2},
-    {21, 2, 8},
-    {21, 8, 16}, // +-+
-    {21, 13, 7},
-    {21, 7, 3},
-    {21, 3, 9},
-    {21, 9, 17}, // +--
-    {22, 14, 4},
-    {22, 4, 0},
-    {22, 0, 10},
-    {22, 10, 18}, // -++
-    {22, 14, 5},
-    {22, 5, 1},
-    {22, 1, 11},
-    {22, 11, 19}, // -+-
-    {23, 15, 6},
-    {23, 6, 2},
-    {23, 2, 10},
-    {23, 10, 18}, // --+
-    {23, 15, 7},
-    {23, 7, 3},
-    {23, 3, 11},
-    {23, 11, 19}, // ---
-};
-
-constexpr u32 vertex_count{24};
-constexpr u32 index_count{44 * 3};
-
-// Lattice spacing of the truncated-octahedron tessellation. The TO above has
-// hexagonal face centers at (±1, ±1, ±1), so adjacent cell centers along a
-// (1,1,1)-type axis are 2*sqrt(3) apart; along an axis they are 4 apart.
-constexpr f32 lattice_step{4.0f};
 
 struct InstanceData
 {
     f32 center[3];
-    f32 scale;
-    // TODO(dr): Add offsets for vertex pulling and skip dynamic offsets of vertex buffers
+    f32 scale; // TODO(dr): Pipe scale through as a geometry uniform instead?
 };
 
-struct ObjectData
+struct alignas(16) ObjectData
 {
     f32 world_to_clip[16]{};
-};
-
-enum struct BindSlot : u8
-{
-    Pass = 0,
-    Material,
-    Geometry,
-    Object,
+    u32 vertex_offset;
+    u32 instance_offset;
 };
 
 struct
 {
     DepthTarget depth;
     GpuRenderPipeline pipeline;
-    struct
-    {
-        VertexStream vertex;
-        IndexStream<i32> index;
-    } streams;
-    struct
-    {
-        GpuBindGroupLayout bgl;
-        GpuBindGroup bg;
-        GpuBuffer buf;
-    } uniforms;
+    VertexStream vertex_stream;
+    IndexStream<u32> index_stream;
+    UniformStream uniform_stream;
     DynamicArray<InstanceData> instances;
     f32 fov_y{deg_to_rad(45.0f)};
     f32 clip_near{0.1f};
@@ -210,32 +172,31 @@ WGPURenderPipeline make_pipeline(
     return wgpuDeviceCreateRenderPipeline(device, &pipe_desc);
 }
 
-void init_instances()
+void init_pipeline(WGPUDevice const device)
 {
-    auto& xs = state.instances;
-    xs.clear();
+    WGPUBindGroupLayout const bg_layout[]{
+        empty_bgl, // Pass
+        empty_bgl, // Material
+        VertexStream::bindings_layout(), // Geometry
+        UniformStream::bindings_layout(), // Uniform
+    };
+    WGPUPipelineLayoutDescriptor const pl_desc{
+        .bindGroupLayoutCount = size(bg_layout),
+        .bindGroupLayouts = bg_layout,
+    };
+    GpuPipelineLayout const pl_layout = wgpuDeviceCreatePipelineLayout(device, &pl_desc);
+    assert(pl_layout);
 
-    // 3x3x3 cubic centers
-    for (i32 a = -1; a <= 1; ++a)
-    {
-        for (i32 b = -1; b <= 1; ++b)
-        {
-            for (i32 c = -1; c <= 1; ++c)
-                xs.push_back({{a * lattice_step, b * lattice_step, c * lattice_step}, 1.0f});
-        }
-    }
+    ShaderAsset const* shader_src = load_shader_asset("assets/shaders/unlit_vertex_color.wgsl");
+    assert(shader_src);
 
-    // 2x2x2 body centers (shifted by half a lattice step)
-    constexpr f32 h{lattice_step * 0.5f};
-    for (i32 a = -1; a <= 0; ++a)
-    {
-        for (i32 b = -1; b <= 0; ++b)
-        {
-            for (i32 c = -1; c <= 0; ++c)
-                xs.push_back(
-                    {{a * lattice_step + h, b * lattice_step + h, c * lattice_step + h}, 1.0f});
-        }
-    }
+    state.pipeline = make_pipeline(
+        device,
+        pl_layout,
+        {shader_src->src.c_str(), WGPU_STRLEN},
+        default_surface_format,
+        DepthTarget::format);
+    assert(state.pipeline);
 }
 
 void init_gpu_resources()
@@ -246,83 +207,39 @@ void init_gpu_resources()
     glfwGetFramebufferSize(App::window(), &fb_w, &fb_h);
     state.depth = DepthTarget::make(device, fb_w, fb_h);
 
+    VertexStream::init_bindings_layout(device);
+    UniformStream::init_bindings_layout(device);
+
     init_empty_bindings(device);
-    VertexStream::init_shared_resources(device);
+    init_pipeline(device);
+}
 
-    // Uniform buffer/bindings
+void init_instances()
+{
+    constexpr f32 spacing = Lattice::spacing;
+
+    auto& xs = state.instances;
+    xs.clear();
+
+    // 3x3x3 cubic centers
+    for (i32 a = -1; a <= 1; ++a)
     {
-        WGPUBindGroupLayoutEntry const bgl_entries[]{
-            {
-                .binding = 0,
-                .visibility = WGPUShaderStage_Vertex,
-                .buffer{
-                    .type = WGPUBufferBindingType_Uniform,
-                    .hasDynamicOffset = false,
-                    .minBindingSize = 0,
-                },
-            },
-        };
-        WGPUBindGroupLayoutDescriptor const bgl_desc{
-            .entryCount = size(bgl_entries),
-            .entries = bgl_entries,
-        };
-        WGPUBindGroupLayout const uniform_bgl = wgpuDeviceCreateBindGroupLayout(device, &bgl_desc);
-        assert(uniform_bgl);
-
-        WGPUBufferDescriptor const buf_desc{
-            .usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst,
-            .size = sizeof(ObjectData),
-        };
-        WGPUBuffer const uniform_buf = wgpuDeviceCreateBuffer(device, &buf_desc);
-        assert(uniform_buf);
-
-        WGPUBindGroupEntry const bg_entries[]{
-            {
-                .binding = 0,
-                .buffer = uniform_buf,
-                .size = WGPU_WHOLE_SIZE,
-            },
-        };
-        WGPUBindGroupDescriptor const bg_desc{
-            .layout = uniform_bgl,
-            .entryCount = size(bg_entries),
-            .entries = bg_entries,
-        };
-        WGPUBindGroup const uniform_bg = wgpuDeviceCreateBindGroup(device, &bg_desc);
-        assert(uniform_bg);
-
-        state.uniforms = {
-            .bgl = uniform_bgl,
-            .bg = uniform_bg,
-            .buf = uniform_buf,
-        };
+        for (i32 b = -1; b <= 1; ++b)
+        {
+            for (i32 c = -1; c <= 1; ++c)
+                xs.push_back({{a * spacing, b * spacing, c * spacing}, 1.0f});
+        }
     }
 
-    // Pipeline
+    // 2x2x2 body centers (shifted by half a lattice step)
+    constexpr f32 h{spacing * 0.5f};
+    for (i32 a = -1; a <= 0; ++a)
     {
-        WGPUBindGroupLayout const bg_layout[]{
-            empty_bgl, // Pass
-            empty_bgl, // Material
-            VertexStream::bindings_layout(), // Geometry
-            state.uniforms.bgl, // Object
-        };
-        WGPUPipelineLayoutDescriptor const pl_desc{
-            .bindGroupLayoutCount = size(bg_layout),
-            .bindGroupLayouts = bg_layout,
-        };
-        GpuPipelineLayout const pl_layout = wgpuDeviceCreatePipelineLayout(device, &pl_desc);
-        assert(pl_layout);
-
-        ShaderAsset const* shader_src = load_shader_asset("assets/shaders/unlit_vertex_color.wgsl");
-        assert(shader_src);
-
-        state.pipeline = make_pipeline(
-            device,
-            pl_layout,
-            {shader_src->src.c_str(), WGPU_STRLEN},
-            default_surface_format,
-            DepthTarget::format);
-        assert(state.pipeline);
+        for (i32 b = -1; b <= 0; ++b)
+        {
+            for (i32 c = -1; c <= 0; ++c)
+                xs.push_back({{a * spacing + h, b * spacing + h, c * spacing + h}, 1.0f});
+        }
     }
 }
 
@@ -367,40 +284,52 @@ void update()
     WGPUDevice const device = App::gpu().device;
     WGPUQueue const queue = wgpuDeviceGetQueue(device);
 
+    /*
+        TODO(dr): Scale instances by proximity to ray from mouse. Pass ray in via uniforms
+        (pass-level).
+    */
+
     // Animate per-instance scale
     f32 const scale = instance_scale();
     for (auto& inst : state.instances)
         inst.scale = scale;
 
+    using Mesh = Lattice::Mesh;
+
     // Pack per-vertex positions as float4 for std430 alignment
-    f32 vertex_data[vertex_count][4]{};
-    for (u32 i = 0; i < vertex_count; ++i)
+    f32 vertices[Mesh::num_verts][4]{};
+    for (u32 i = 0; i < Mesh::num_verts; ++i)
     {
-        vertex_data[i][0] = to_verts[i][0];
-        vertex_data[i][1] = to_verts[i][1];
-        vertex_data[i][2] = to_verts[i][2];
+        vertices[i][0] = Mesh::verts[i][0];
+        vertices[i][1] = Mesh::verts[i][1];
+        vertices[i][2] = Mesh::verts[i][2];
     }
 
-    // Push geometry to the stream. The returned byte offsets are used as the matching dynamic
-    // offsets at draw time; the caller decides which slot in geom.bindings() each one is bound to.
-    auto& streams = state.streams;
+    u32 const vp_offset = state.vertex_stream.push(as_span(vertices).as_const());
+    u32 const ip_offset = state.vertex_stream.push(as_span(state.instances).as_const());
+    state.vertex_stream.update_device_buffer(device, queue);
+    state.vertex_stream.clear();
 
-    u32 const vp_offset = streams.vertex.push(as<u8>(as_span(vertex_data)));
-    u32 const ip_offset = streams.vertex.push(as<u8>(as_span(state.instances)));
-    streams.vertex.update_device_buffer(device, queue);
-    streams.vertex.clear();
+    u32 const idx_offset = state.index_stream.push(as<u32>(as_span(Mesh::tris)));
+    state.index_stream.update_device_buffer(device, queue);
+    state.index_stream.clear();
 
-    u32 const idx_offset = streams.index.push(as<i32>(as_span(to_tris)));
-    streams.index.update_device_buffer(device, queue);
-    streams.index.clear();
+    // Update pass uniforms
+    ObjectData obj{
+        .vertex_offset = vp_offset,
+        .instance_offset = ip_offset,
+    };
+    as_mat<4, 4>(obj.world_to_clip) = make_world_to_clip();
 
-    // Update pass uniformss
-    Mat4<f32> const world_to_clip = make_world_to_clip();
-    wgpuQueueWriteBuffer(queue, state.uniforms.buf, 0, world_to_clip.data(), sizeof(ObjectData));
+    u32 uniform_offsets[4]{};
+    uniform_offsets[3] = state.uniform_stream.push(as_bytes(obj));
+    state.uniform_stream.update_device_buffer(device, queue);
+    state.uniform_stream.clear();
 
     GpuCommandEncoder const cmd_encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
     assert(cmd_encoder);
 
+    // Render pass
     {
         auto const pass = SurfaceRenderPass::make(
             cmd_encoder,
@@ -417,34 +346,31 @@ void update()
             0,
             nullptr);
 
-        // Bind the geometry stream's storage buffer with per-slot dynamic
-        // offsets. Slots 2-3 are unused but the layout requires four offsets.
-        u32 const offsets[4]{vp_offset, ip_offset, 0, 0};
         wgpuRenderPassEncoderSetBindGroup(
             pass.encoder,
             u32(BindSlot::Geometry),
-            streams.vertex.bindings(),
-            size(offsets),
-            offsets);
+            state.vertex_stream.bindings(),
+            0,
+            nullptr);
 
         wgpuRenderPassEncoderSetPipeline(pass.encoder, state.pipeline);
         wgpuRenderPassEncoderSetBindGroup(
             pass.encoder,
-            u32(BindSlot::Object),
-            state.uniforms.bg,
-            0,
-            nullptr);
+            u32(BindSlot::Uniform),
+            state.uniform_stream.bindings(),
+            4,
+            uniform_offsets);
 
         wgpuRenderPassEncoderSetIndexBuffer(
             pass.encoder,
-            streams.index.device_buffer(),
-            streams.index.format,
+            state.index_stream.device_buffer(),
+            state.index_stream.format,
             0,
             WGPU_WHOLE_SIZE);
 
         wgpuRenderPassEncoderDrawIndexed(
             pass.encoder,
-            index_count,
+            Mesh::num_indices,
             state.instances.size(),
             idx_offset,
             0,

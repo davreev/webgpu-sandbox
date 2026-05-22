@@ -5,12 +5,16 @@
 #include <dr/dynamic_array.hpp>
 #include <dr/hash.hpp>
 #include <dr/hash_map.hpp>
+#include <dr/memory.hpp>
 #include <dr/span.hpp>
 
 #include <wgpu_default_limits.hpp>
 
 #include "basic_types.hpp"
 #include "gpu_resource.hpp"
+#include "traits_fwd.hpp"
+
+// TODO(dr): Rename file "draw_streams.hpp"
 
 namespace wgpu::sandbox
 {
@@ -25,21 +29,37 @@ struct BufferStage
     bool update_device(WGPUDevice device, WGPUQueue queue, WGPUBufferUsage usage);
 };
 
+struct LaneKey
+{
+    void const* src;
+    u8 lane;
+
+    bool operator==(LaneKey const& other) const;
+
+    struct Hash : HighQualityHash
+    {
+        usize operator()(LaneKey const& key) const;
+    };
+};
+
 struct VertexStream
 {
-    static constexpr u32 num_slots = default_max_dynamic_storage_buffers_per_pipeline_layout;
+    static constexpr u8 num_lanes = 4;
 
-    static void init_shared_resources(WGPUDevice device);
+    static void init_bindings_layout(WGPUDevice device);
 
     static WGPUBindGroupLayout bindings_layout();
 
-    u32 push(Span<u8 const> const& bytes);
-
-    template <u8 slot>
-    u32 push_once(void const* key, Span<u8 const> const& bytes)
+    template <typename T>
+    u32 push(Span<T const> const& items)
     {
-        static_assert(slot < num_slots);
-        return push_once({key, slot}, bytes);
+        return push(as<u8>(items), sizeof(T)) / sizeof(T);
+    }
+
+    template <u8 lane, typename T>
+    u32 push_once(void const* key, Span<T const> const& items)
+    {
+        return push_once<lane>(key, as<u8>(items), sizeof(T)) / sizeof(T);
     }
 
     void update_device_buffer(WGPUDevice device, WGPUQueue queue);
@@ -51,26 +71,20 @@ struct VertexStream
     void clear();
 
   private:
-    struct Key
-    {
-        void const* src;
-        u8 slot;
-        bool operator==(Key const& other) const;
-
-        struct Hash : HighQualityHash
-        {
-            usize operator()(Key const& key) const;
-        };
-    };
-
     BufferStage stage_;
-    HashMap<Key, u32, Key::Hash> offsets_;
+    HashMap<LaneKey, u32, LaneKey::Hash> offsets_;
     GpuBindGroup bindings_{};
-    u32 last_offset_{};
-    u32 max_size_{};
-    u32 bound_size_{};
 
-    u32 push_once(Key const& key, Span<u8 const> const& bytes);
+    u32 push(Span<u8 const> const& bytes, usize align);
+
+    template <u8 lane>
+    u32 push_once(void const* key, Span<u8 const> const& bytes, usize align)
+    {
+        static_assert(lane < num_lanes);
+        return push_once({key, lane}, bytes, align);
+    }
+
+    u32 push_once(LaneKey const& key, Span<u8 const> const& bytes, usize align);
 
     void rebuild_bindings(WGPUDevice device);
 };
@@ -78,23 +92,70 @@ struct VertexStream
 template <typename Index>
 struct IndexStream
 {
-    // TODO(dr): Infer this from the index type
-    static constexpr WGPUIndexFormat format{WGPUIndexFormat_Uint32};
+    static constexpr WGPUIndexFormat format = Traits<IndexStream>::format;
 
     u32 push(Span<Index const> const& indices);
     u32 push_once(void const* key, Span<Index const> const& indices);
 
     void update_device_buffer(WGPUDevice device, WGPUQueue queue);
 
-    WGPUBuffer device_buffer() const { return index_stage_.device_buf; }
+    WGPUBuffer device_buffer() const { return stage_.device_buf; }
 
     void clear();
 
   private:
-    BufferStage index_stage_;
-    HashMap<void const*, u32> index_offsets_;
+    BufferStage stage_;
+    HashMap<void const*, u32> offsets_;
 };
 
-// TODO(dr): Add separate UniformStream type
+template <>
+struct Traits<IndexStream<u32>>
+{
+    static constexpr WGPUIndexFormat format = WGPUIndexFormat_Uint32;
+};
+
+template <>
+struct Traits<IndexStream<u16>>
+{
+    static constexpr WGPUIndexFormat format = WGPUIndexFormat_Uint16;
+};
+
+struct UniformStream
+{
+    static constexpr u8 num_lanes = 4;
+
+    static void init_bindings_layout(WGPUDevice device);
+
+    static WGPUBindGroupLayout bindings_layout();
+
+    u32 push(Span<u8 const> const& bytes);
+
+    template <u8 lane>
+    u32 push_once(void const* key, Span<u8 const> const& bytes)
+    {
+        static_assert(lane < num_lanes);
+        return push_once({key, lane}, bytes);
+    }
+
+    void update_device_buffer(WGPUDevice device, WGPUQueue queue);
+
+    WGPUBuffer device_buffer() const { return stage_.device_buf; }
+
+    WGPUBindGroup bindings() const { return bindings_; }
+
+    void clear();
+
+  private:
+    BufferStage stage_;
+    HashMap<LaneKey, u32, LaneKey::Hash> offsets_;
+    GpuBindGroup bindings_{};
+    u32 last_offset_{};
+    u32 max_size_{};
+    u32 bound_size_{};
+
+    u32 push_once(LaneKey const& key, Span<u8 const> const& bytes);
+
+    void rebuild_bindings(WGPUDevice device);
+};
 
 } // namespace wgpu::sandbox
