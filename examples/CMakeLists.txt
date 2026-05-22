@@ -2,8 +2,8 @@ add_library(
     example-app STATIC
     assets.cpp
     draw_context.cpp
+    draw_streams.cpp
     example_app.cpp
-    geometry_stream.cpp
     gpu_context.cpp
     gpu_resource.cpp
     impl.cpp

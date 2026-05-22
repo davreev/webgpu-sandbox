@@ -9,7 +9,7 @@
 
 #include "basic_types.hpp"
 #include "draw_command.hpp"
-#include "geometry_stream.hpp"
+#include "draw_streams.hpp"
 
 namespace wgpu::sandbox
 {

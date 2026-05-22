@@ -1,5 +1,4 @@
-#include "geometry_stream.hpp"
-#include "webgpu/webgpu.h"
+#include "draw_streams.hpp"
 
 #include <cassert>
 

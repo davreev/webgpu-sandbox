@@ -5,9 +5,6 @@
 
 #include <wgpu_default_limits.hpp>
 
-#include "draw_command.hpp"
-#include "geometry_stream.hpp"
-
 namespace wgpu::sandbox
 {
 
